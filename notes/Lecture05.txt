@@ -1,0 +1,65 @@
+LECTURE 05 NOTES 1-25-18
+
+TRAINING DATA:
+- satellite image (--> rgb?)
+- Digital Globe Database
+- over Colombia, Missouri
+- center points color-coded for each class
+- .txt with exact center points of targets
+
+GOAL:
+detect and classify 4 classes:
+- white cars,
+- red cars,
+- (blue) pools, and
+- (green) ponds
+
+DEVELOPMENT:
+- preprocessing
+- feature extraction
+- model choice
+- error metrics
+- training
+- evaluation
+- hyperparameter tuning
+
+FINAL METRICS:
+- "generous" halo
+- some summation that Mark came up with
+- he couldn't explain what it meant after class
+- just label stuff right and win
+- alternatives:
+  * precision+recall+accuracy
+  * F-score or G-score
+  * (Euclidian) distance from centroid
+
+IDEAS:
+- preprocessing
+  * calibration, smoothing, noise reduction?
+  * time, location, sunlight/shadows?
+  * enforce size/location priors
+    > cars are small, forests are large
+	> cars do not belong in a forest
+	> leveragee roads
+  * consider image resolution
+- feature extraction
+  * superpixel segmentation
+  * Haar-like features
+- model choice
+  * CNN component
+  * adaptive boosting
+  * SVM (and E-SVM?)
+  * PCA + Bayesian background transform
+- prediction
+  * iterative adjustment of predicted target point
+    > converge to some optimal center
+
+READING LIST:
+  * https://www.sciencedirect.com/science/article/pii/S0262885606003544
+  * https://www.sciencedirect.com/science/article/pii/S092427160800097X
+  * http://ieeexplore.ieee.org/document/5440956/?reload=true
+  * http://ieeexplore.ieee.org/document/7827266/
+  * https://www.aaai.org/ocs/index.php/AAAI/AAAI16/paper/download/12176/11714
+  * http://www.tandfonline.com/doi/full/10.1080/01431160500238901?scroll=top&needAccess=true
+  * http://www.isprs.org/proceedings/XXXVI/part3/singlepapers/O_17.pdf
+  * https://www.ripublication.com/ijcir17/ijcirv13n5_04.pdf
