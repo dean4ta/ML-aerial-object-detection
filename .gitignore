@@ -1,5 +1,11 @@
+### Custom ignores ###
 
-# Created by https://www.gitignore.io/api/data,linux,macos,matlab,images,python,windows
+*.mat
+
+
+
+# Auto-generated ignores:
+# data,linux,macos,matlab,images,python,windows
 
 ### Data ###
 *.csv
@@ -266,6 +272,3 @@ $RECYCLE.BIN/
 
 # Windows shortcuts
 *.lnk
-
-
-# End of https://www.gitignore.io/api/data,linux,macos,matlab,images,python,windows
