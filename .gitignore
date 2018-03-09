@@ -1,7 +1,7 @@
 ### Custom ignores ###
 
 *.mat
-
+data/*.txt
 
 
 # Auto-generated ignores:
