@@ -6,10 +6,14 @@
 import numpy as np # (given)
 import matplotlib.pyplot as plt # (given)
 import scipy.io as spio # (given)
+
 import cv2
 
+from skimage.segmentation import felzenszwalb, slic, quickshift
 
-#%% data i/o
+RGB_FLAG = [255,0,255]
+
+#%% general data i/o
 
 def read_train_data():
     ''' loads provided training data from 'data' folder in root directory
@@ -44,12 +48,12 @@ def write_train_data(data_train,locs,labels,pond_masks):
         y = np.array(locs[labels==(i+1),1],dtype=int)
         x = np.array(locs[labels==(i+1),0],dtype=int)
         for j in range(np.size(locs[labels==(i+1)],axis=0)):
-            data_train_labels[y[j],x[j],:] = [255,0,255]
+            data_train_labels[y[j],x[j],:] = RGB_FLAG
     for i in range(8): # pond masks
         y = pond_masks[i][:,1]
         x = pond_masks[i][:,0]
         for j in range(np.size(pond_masks[i],axis=0)):
-            data_train_masks[y[j],x[j],:] = [255,0,255]
+            data_train_masks[y[j],x[j],:] = RGB_FLAG
     cv2.imwrite('../data/data_train_original.png',data_train[:,:,::-1])
     cv2.imwrite('../data/data_train_labels.png',data_train_labels[:,:,::-1])
     cv2.imwrite('../data/data_train_masks.png',data_train_masks[:,:,::-1])
@@ -91,14 +95,67 @@ def plot_train_masks(N,pond_masks):
     plt.show()
 
 
+#%%  preprocessing
+    
+def segmentation_canny(data,d,sigmaColor,sigmaSpace,minVal,maxVal):
+    ''' performs edge detection using canny filter
+            d: diameter of pixel neighborhoods used during filtering
+            sigmaColor: color space filter sigma
+                (larger values, more distinct colors will blur)
+            sigmaSpace: coordinate space filter sigma
+                (larger value, farther pixels will blur)
+            minVal: lower threshold (less significant edges are discarded)
+            maxVal: higher threshold (more significant edges are preserved)
+    '''
+    smooth = cv2.bilateralFilter(data,d,sigmaColor,sigmaSpace)
+    edges = cv2.Canny(smooth,minVal,maxVal,L2gradient=True)
+    # todo - close open canny contours for better segmentation
+    data[edges>0,:] = RGB_FLAG
+    cv2.imwrite('../data/segmentation_canny.png',data[:,:,::-1])
+
+
+def segmentation_felzenszwalb(data,scale,sigma,min_size,\
+    d,sigmaColor,sigmaSpace,minVal,maxVal):
+    ''' performs segmentation using felzenszwalb
+            scale: higher value, larger clusters
+            sigma: gaussian filter width
+            min_size: min component size
+            <canny params, refer to segmentation_canny()>
+    '''
+    segments = felzenszwalb(data,scale,sigma,min_size)
+    edges = cv2.Canny(segments,minVal,maxVal,L2gradient=True)
+    data[edges>0,:] = RGB_FLAG
+    cv2.imwrite('../data/segmentation_felzenszwalb.png',data[:,:,::-1])
+
+
+def segmentation_quickshift(data,ratio,kernel_size,max_dist,return_tree,sigma,\
+    d,sigmaColor,sigmaSpace,minVal,maxVal):
+    ''' performs segmentation using quickshift
+            ratio: 
+            kernel_size: 
+            max_dist: 
+            return_tree: 
+            sigma: 
+            <canny params, refer to segmentation_canny()>
+    '''
+    segments = quickshift(data,)
+    edges = cv2.Canny(segments,minVal,maxVal,L2gradient=True)
+    data[edges>0,:] = RGB_FLAG
+    cv2.imwrite('../data/segmentation_quickshift.png',data[:,:,::-1])
+
+
 #%%  main
 
 def main():
     
     data_train,locs,labels,pond_masks = read_train_data()
-    write_train_data(data_train,locs,labels,pond_masks)
-    plot_train_labels(data_train,labels,locs)
-    plot_train_masks(np.size(data_train,axis=0),pond_masks)
+    #write_train_data(data_train,locs,labels,pond_masks)
+    #plot_train_labels(data_train,labels,locs)
+    #plot_train_masks(np.size(data_train,axis=0),pond_masks)
+    
+    segmentation_canny(data_train.copy(),9,75,75,100,200)
+    segmentation_felzenszwalb(data_train.copy(),3,.95,5,9,75,75,100,200)
+    segmentation_quickshift(data_train.copy(),1.0,5,10,False,0,9,75,75,100,200)
 
 
 if  __name__ == '__main__':
