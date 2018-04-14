@@ -6,8 +6,11 @@
 import numpy as np # (given)
 import matplotlib.pyplot as plt # (given)
 import scipy.io as spio # (given)
+
 import cv2
 
+from numba import jit
+from roll import rolling_window
 
 #%% data i/o
 
@@ -91,14 +94,39 @@ def plot_train_masks(N,pond_masks):
     plt.show()
 
 
+#%% feature extraction
+@jit
+def extract_features(data,win_y,win_x,nfeatures):
+    ''' extract features from given image over sliding window
+            data - 3D image (2D image x color dimensions)
+            win_y - window height
+            win_x - window width
+    '''
+    print('Running Feature Extractor...')
+    N1,N2,C = np.shape(data)
+    features = np.zeros((N1-win_y+1,N2-win_x+1,C*nfeatures))
+    feature_iter = 0
+    for x in range(C):
+        print(' computing sliding windows for',x,'color dimension')
+        windows = rolling_window(data[:,:,x],(win_y,win_x))
+        # ***** modify below - add features as desired ***** #
+        # features[:,:,feature_iter+n] = f(windows,axis=(2,3)) #
+        print(' computing features for',x,'color dimension')
+        features[:,:,feature_iter+0] = np.mean(windows,axis=(2,3))
+        features[:,:,feature_iter+1] = np.median(windows,axis=(2,3))
+        feature_iter += nfeatures
+    return features
+
 #%%  main
 
 def main():
     
     data_train,locs,labels,pond_masks = read_train_data()
-    write_train_data(data_train,locs,labels,pond_masks)
-    plot_train_labels(data_train,labels,locs)
-    plot_train_masks(np.size(data_train,axis=0),pond_masks)
+    #write_train_data(data_train,locs,labels,pond_masks)
+    #plot_train_labels(data_train,labels,locs)
+    #plot_train_masks(np.size(data_train,axis=0),pond_masks)
+    features = extract_features(data_train,6,6,2)
+    print(features)
 
 
 if  __name__ == '__main__':
