@@ -11,6 +11,7 @@ import cv2,colorsys
 
 from numba import jit
 from roll import rolling_window
+from matplotlib import colors as mcolors
 
 #%% data i/o
 
@@ -116,32 +117,29 @@ def extract_features(data,win_y,win_x,nfeatures):
         # ***** modify below - add features as desired ***** #
         # features[:,:,feature_iter+n] = f(windows,axis=(2,3)) #
         print(' computing features for',x,'color dimension')
+        # features[:,:,feature_iter+0] = np.mean(windows,axis=(2,3)) -- update to be self pixel
         features[:,:,feature_iter+0] = np.mean(windows,axis=(2,3))
         features[:,:,feature_iter+1] = np.median(windows,axis=(2,3))
         feature_iter += nfeatures
     return features
 
-#@jit
+@jit
 def convert_colorspace(data):
     ''' converts rgb input image into desired color spaces
             data - 3D image (2D image x color dimensions)
     '''
-    N1,N2,C = np.shape(data)
-    for r in range(N1):
-        for c in range(N2):
-            y,i,q = colorsys.rgb_to_yiq(data[r,c,0],data[r,c,1],data[r,c,2])
-            h,l,s = colorsys.rgb_to_hls(data[r,c,0],data[r,c,1],data[r,c,2])
-            h,s,v = colorsys.rgb_to_hsv(data[r,c,0],data[r,c,1],data[r,c,2])
-            gry = 0.2989*data[r,c,0]+0.5870*data[r,c,1]+0.1140*data[r,c,2]
-        print(r)
-    print('done')
+    HSV = np.array(mcolors.rgb_to_hsv(data/255)*255).astype(np.uint8)
+    GRY = np.array(0.2989*data[:,:,0]+0.5870*data[:,:,1]+0.1140*data[:,:,2]).astype(np.uint8)[:,:,None]
+    data = np.concatenate((data,HSV,GRY),axis=2)
+    return data
 
 #%%  main
 
 def main():
     
-    data_train,locs,labels,pond_masks = read_train_data()
-    convert_colorspace(data_train)
+    print('main')
+    #data_train,locs,labels,pond_masks = read_train_data()
+    #data_train = convert_colorspace(data_train)
     #write_train_data(data_train,locs,labels,pond_masks)
     #plot_train_labels(data_train,labels,locs)
     #plot_train_masks(np.size(data_train,axis=0),pond_masks)
