@@ -24,16 +24,16 @@ def read_train_data():
             pond_masks: (?,2) (index,xpixel/ypixel)
     '''
     # load data_train.mat: format - <y>,<x>,<r,g,b>
-    mat = spio.loadmat('data_train') # load mat object
+    mat = spio.loadmat('../data/data_train.mat') # load mat object
     data_train = mat.get('data_train') # extract image struct from mat object
     # load labels.txt: format - <x> <y> <label>
-    pairs = np.loadtxt('labels.txt').astype(int) # load label matrix
+    pairs = np.loadtxt('../data/labels.txt').astype(int) # load label matrix
     locs = pairs[:,0:2] # <x> <y> pixel indices
     labels = pairs[:,2] # <label> 1=whitecar,2=redcar,3=pool,4=pond
     # load pond#.txt masks: format - <x> <y>
     pond_masks = []
     for i in range(8):
-        file = 'pond'+str(i+1)+'.txt'
+        file = '../data/pond'+str(i+1)+'.txt'
         pond_masks.append(np.loadtxt(file).astype(int))
     return data_train,locs,labels,pond_masks
 
@@ -104,9 +104,9 @@ def glcm_texture():
 
 #%% FFT (HighPass Filter)
 
-def cv_dft(image_name, HPF_size=60, sel_color=0, a=1, b=2):
+def cv_dft(img, HPF_size=60, sel_color=0, a=1, b=2):
     if sel_color == 0:
-        img = cv2.imread(image_name,0) #convert to gray
+        #img = cv2.imread(image_name,0) #convert to gray
         dft = cv2.dft(np.float32(img),flags = cv2.DFT_COMPLEX_OUTPUT)
         dft_shift = np.fft.fftshift(dft)
         
@@ -149,20 +149,25 @@ def cv_dft(image_name, HPF_size=60, sel_color=0, a=1, b=2):
 
 #%% Image Denoising ("low pass filter")
 
-def denoise_colored_image(image_name):
-    img = cv2.imread(image_name)
+def denoise_colored_image(img):
+    #img = cv2.imread(image_name)
 
-    dst = cv2.fastNlMeansDenoisingColored(img,None,4,4,3,17)
+    dst = cv2.fastNlMeansDenoisingColored(img,None,10,10,7,21)
     
-    plt.figure(3)
-    plt.subplot(121),plt.imshow(img)
-    plt.subplot(122),plt.imshow(dst)
-    plt.show()
-    cv2.imwrite('data_train_denoised.png', dst[:,:,::-1])
+# =============================================================================
+#     plt.figure(3)
+#     plt.subplot(121),plt.imshow(img)
+#     plt.subplot(122),plt.imshow(dst)
+#     plt.show()
+#     cv2.imwrite('../data/data_train_denoised.png', dst[:,:,::-1])
+# =============================================================================
+    return dst[:,:,::-1]
     
-def bilateral_filter(image_name):
-    img = cv2.imread(image_name)
-    cv2.bilateralFilter(img,9,75,75)
+    
+def bilateral_filter(img):
+    #img = cv2.imread(image_name)
+    bil = cv2.bilateralFilter(img,9,75,75)
+    return bil
 
 #%% feature extraction
 @jit
@@ -193,24 +198,40 @@ def extract_features(data,win_y,win_x,nfeatures):
 
 def main():
     
-    data_train,locs,labels,pond_masks = read_train_data()
+    #data_train,locs,labels,pond_masks = read_train_data()
     # write_train_data(data_train,locs,labels,pond_masks)
     # plot_train_labels(data_train,labels,locs)
     # plot_train_masks(np.size(data_train,axis=0),pond_masks)
-    features = extract_features(data_train,6,6,2)    
+    #features = extract_features(data_train,6,6,2)    
     # dft w/o denoising
-	dft = cv_dft('data_train_original.png',a=1,b=2)
-	# =============================================================================
-	# #dft w denoising
-	# denoise_colored_image('data_train_denoised.png')
-	# denoised_dft = cv_dft('data_train_denoised.png',a=3,b=4)
-	# =============================================================================
-	#dft w bilateral
-	bilateral_filter('data_train_denoised.png')
-	denoised_dft = cv_dft('data_train_denoised.png',a=3,b=4)
+    dft = cv_dft('../data/data_train_original.png',a=1,b=2)
+    # =============================================================================
+    # #dft w denoising
+    # denoise_colored_image('data_train_denoised.png')
+    # denoised_dft = cv_dft('data_train_denoised.png',a=3,b=4)
+    # =============================================================================
+    #dft w bilateral
+    bilateral_filter('../data/data_train_denoised.png')
+    denoised_dft = cv_dft('../data/data_train_denoised.png',a=3,b=4)
 
 
+# =============================================================================
+# if  __name__ == '__main__':
+# 	main()
+# =============================================================================
 
-if  __name__ == '__main__':
-	main()
+data_train,locs,labels,pond_masks = read_train_data()
+#convert to grayscale
+r, g, b = data_train[:,:,0], data_train[:,:,1], data_train[:,:,2]
+data_gray = 0.2989 * r + 0.5870 * g + 0.1140 * b
+data_gray = (np.round(data_gray)).astype(np.uint8)
 
+data_dft = cv_dft(data_gray,a=1,b=2)
+
+
+denoised_data = denoise_colored_image(data_train)
+r, g, b = denoised_data[:,:,0], denoised_data[:,:,1], denoised_data[:,:,2]
+denoised_data = 0.2989 * r + 0.5870 * g + 0.1140 * b
+denoised_data = (np.round(denoised_data)).astype(np.uint8)
+
+denoised_data_dft = cv_dft(denoised_data,a=3,b=4)
