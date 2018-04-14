@@ -8,6 +8,10 @@ import matplotlib.pyplot as plt # (given)
 import scipy.io as spio # (given)
 import cv2
 
+#dean added
+from skimage.feature import greycomatrix, greycoprops
+from skimage import data
+
 
 #%% data i/o
 
@@ -19,16 +23,16 @@ def read_train_data():
             pond_masks: (?,2) (index,xpixel/ypixel)
     '''
     # load data_train.mat: format - <y>,<x>,<r,g,b>
-    mat = spio.loadmat('../data/data_train.mat') # load mat object
+    mat = spio.loadmat('data_train') # load mat object
     data_train = mat.get('data_train') # extract image struct from mat object
     # load labels.txt: format - <x> <y> <label>
-    pairs = np.loadtxt('../data/labels.txt').astype(int) # load label matrix
+    pairs = np.loadtxt('labels.txt').astype(int) # load label matrix
     locs = pairs[:,0:2] # <x> <y> pixel indices
     labels = pairs[:,2] # <label> 1=whitecar,2=redcar,3=pool,4=pond
     # load pond#.txt masks: format - <x> <y>
     pond_masks = []
     for i in range(8):
-        file = '../data/pond'+str(i+1)+'.txt'
+        file = 'pond'+str(i+1)+'.txt'
         pond_masks.append(np.loadtxt(file).astype(int))
     return data_train,locs,labels,pond_masks
 
@@ -50,9 +54,9 @@ def write_train_data(data_train,locs,labels,pond_masks):
         x = pond_masks[i][:,0]
         for j in range(np.size(pond_masks[i],axis=0)):
             data_train_masks[y[j],x[j],:] = [255,0,255]
-    cv2.imwrite('../data/data_train_original.png',data_train[:,:,::-1])
-    cv2.imwrite('../data/data_train_labels.png',data_train_labels[:,:,::-1])
-    cv2.imwrite('../data/data_train_masks.png',data_train_masks[:,:,::-1])
+    cv2.imwrite('data_train_original.png',data_train[:,:,::-1])
+    cv2.imwrite('data_train_labels.png',data_train_labels[:,:,::-1])
+    cv2.imwrite('data_train_masks.png',data_train_masks[:,:,::-1])
 
 
 #%% viualization
@@ -91,6 +95,75 @@ def plot_train_masks(N,pond_masks):
     plt.show()
 
 
+#%% GLCM Texture Features
+# GLCM (Grey Level Co-occurrence Matrices)
+
+def glcm_texture():
+    a = 1;
+    return a
+
+#%% FFT (HighPass Filter)
+
+def cv_dft(image_name, HPF_size=60, sel_color=0, a=1, b=2):
+    if sel_color == 0:
+        img = cv2.imread(image_name,0) #convert to gray
+        dft = cv2.dft(np.float32(img),flags = cv2.DFT_COMPLEX_OUTPUT)
+        dft_shift = np.fft.fftshift(dft)
+        
+        magnitude_spectrum = 20*np.log(cv2.magnitude(dft_shift[:,:,0],dft_shift[:,:,1]))
+        
+        plt.figure(a)
+        plt.subplot(121),plt.imshow(img, cmap = 'gray')
+        plt.title('Input Image'), plt.xticks([]), plt.yticks([])
+        plt.subplot(122),plt.imshow(magnitude_spectrum, cmap = 'gray')
+        plt.title('Magnitude Spectrum'), plt.xticks([]), plt.yticks([])
+        plt.show()
+        
+        rows, cols = img.shape
+        crow,ccol = int(rows/2) , int(cols/2)
+        
+        # create a mask first, center square is 1, remaining all zeros
+        mask = np.ones((rows,cols,2),np.uint8)
+        mask[crow-HPF_size:crow+HPF_size, ccol-HPF_size:ccol+HPF_size] = 0
+        
+        # apply mask and inverse DFT
+        fshift = dft_shift*mask
+        f_ishift = np.fft.ifftshift(fshift)
+        img_back = cv2.idft(f_ishift)
+        img_back = cv2.magnitude(img_back[:,:,0],img_back[:,:,1])
+        
+        img_back = img_back/np.max(img_back)*255
+        
+        img_back = img_back**1.7
+        img_back255 = np.where(img_back > 255)
+        img_back[img_back255] = 255
+        
+        plt.figure(b)
+        plt.subplot(121),plt.imshow(img, cmap = 'gray')
+        plt.title('Input Image'), plt.xticks([]), plt.yticks([])
+        plt.subplot(122),plt.imshow(img_back, cmap = 'gray')
+        plt.title('Magnitude Spectrum'), plt.xticks([]), plt.yticks([])
+        plt.show()
+    
+    return img_back
+
+#%% Image Denoising ("low pass filter")
+
+def denoise_colored_image(image_name):
+    img = cv2.imread(image_name)
+
+    dst = cv2.fastNlMeansDenoisingColored(img,None,4,4,3,17)
+    
+    plt.figure(3)
+    plt.subplot(121),plt.imshow(img)
+    plt.subplot(122),plt.imshow(dst)
+    plt.show()
+    cv2.imwrite('data_train_denoised.png', dst[:,:,::-1])
+    
+def bilateral_filter(image_name):
+    img = cv2.imread(image_name)
+    cv2.bilateralFilter(img,9,75,75)
+
 #%%  main
 
 def main():
@@ -99,8 +172,28 @@ def main():
     write_train_data(data_train,locs,labels,pond_masks)
     plot_train_labels(data_train,labels,locs)
     plot_train_masks(np.size(data_train,axis=0),pond_masks)
+    #    glcm_texture()
+    plt.imshow(data_train[:,:,::-1])
+    #    return data_train    
 
+#%% test main
 
-if  __name__ == '__main__':
-    main()
+#dft w/o denoising
+dft = cv_dft('data_train_original.png',a=1,b=2)
+    
+# =============================================================================
+# #dft w denoising
+# denoise_colored_image('data_train_denoised.png')
+# denoised_dft = cv_dft('data_train_denoised.png',a=3,b=4)
+# =============================================================================
 
+#dft w bilateral
+bilateral_filter('data_train_denoised.png')
+denoised_dft = cv_dft('data_train_denoised.png',a=3,b=4)
+
+#%%
+# =============================================================================
+# if  __name__ == '__main__':
+#     main()
+# 
+# =============================================================================
