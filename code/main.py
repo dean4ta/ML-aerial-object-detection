@@ -57,6 +57,71 @@ def write_train_data(data_train,locs,labels,pond_masks):
     cv2.imwrite('../data/data_train_labels.png',data_train_labels[:,:,::-1])
     cv2.imwrite('../data/data_train_masks.png',data_train_masks[:,:,::-1])
 
+@jit
+def test_for_labeling(path, flags):
+    ''' verifies given custom labeling flags do not appear in the image
+            path: filepath to original an image (unlabeled/untagged)
+            flags: array of 3-tuples RGB
+    '''
+    im = cv2.imread(path)[:,:,::-1]
+    N1,N2,C = np.shape(im)
+    im = im.reshape((N1*N2,C))
+    for f in flags:
+        R = np.where(im[:,0]==f[0])
+        G = np.where(im[:,1]==f[1])
+        B = np.where(im[:,2]==f[2])
+        t = np.intersect1d(R,np.intersect1d(G,B))
+        if t.size is not 0:
+            raise ValueError('Flag ' + f + ' found in image')
+
+def read_custom_data(path,original=0):
+    ''' read in custom data labels from a labeled/tagged image
+    '''
+    flags = [ # [0,255,0], [0,0,255], unused
+        [255,0,255], # white car
+        [0,255,255], # red car
+        [255,255,0], # pool
+        [255,0,0], # pond
+    ]
+    
+    if original is not 0:
+        print('validating flags...')
+        test_for_labeling(original,flags)
+        print('flags validated')
+    
+    im = cv2.imread(path)[:,:,::-1]
+    agg = np.asarray(['\n'], dtype='|S11')
+    
+    print('parsing labels...')
+    label_ind = 1
+    for f in flags:
+        tmp = np.asarray(np.where(im[:,:,0]==f[0]),dtype='|S4').T
+        delim = np.repeat(' ',tmp.shape[0]).astype(dtype='|S1')
+        R = np.core.defchararray.add(tmp[:,0], delim)
+        R = np.core.defchararray.add(R, tmp[:,1])
+        
+        tmp = np.asarray(np.where(im[:,:,1]==f[1]),dtype='|S4').T
+        delim = np.repeat(' ',tmp.shape[0]).astype(dtype='|S1')
+        G = np.core.defchararray.add(tmp[:,0], delim)
+        G = np.core.defchararray.add(G, tmp[:,1])
+        
+        tmp = np.asarray(np.where(im[:,:,2]==f[2]),dtype='|S4').T
+        delim = np.repeat(' ',tmp.shape[0]).astype(dtype='|S1')
+        B = np.core.defchararray.add(tmp[:,0], delim)
+        B = np.core.defchararray.add(B, tmp[:,1])
+        
+        tmp = np.intersect1d(np.intersect1d(R,G),B)
+        label = np.repeat(' '+str(label_ind),tmp.shape[0]).astype(dtype='|S2')
+        tmp = np.core.defchararray.add(tmp, label)
+        if tmp.size is 0:
+            tmp = np.asarray(['\n'],dtype='|S11')
+        agg = np.concatenate((agg,tmp),axis=0)
+        label_ind += 1
+    
+    out = '../data/custom_labels.txt'
+    np.savetxt(out,tmp,fmt='%s',newline='\n')
+    print('labels written to ' + out)
+        
 
 #%% viualization
 
@@ -121,7 +186,16 @@ def extract_features(data,win_y,win_x,nfeatures):
 
 def main():
     
+<<<<<<< Updated upstream
     data_train,locs,labels,pond_masks = read_train_data()
+=======
+    #print('main')
+    data_path='../data/data_train_matlab.png'
+    labeled_path='../data/data_train_matlab_labeled.png'
+    read_custom_data(labeled_path,data_path)
+    #data_train,locs,labels,pond_masks = read_train_data()
+    #data_train = convert_colorspace(data_train)
+>>>>>>> Stashed changes
     #write_train_data(data_train,locs,labels,pond_masks)
     #plot_train_labels(data_train,labels,locs)
     #plot_train_masks(np.size(data_train,axis=0),pond_masks)
