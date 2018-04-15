@@ -11,9 +11,11 @@ import cv2, fileinput
 
 from numba import jit
 from roll import rolling_window
+from matplotlib import colors as mcolors
 
 #%% data i/o
 
+@jit
 def read_train_data():
     ''' loads provided training data from 'data' folder in root directory
             data_train: (6250,6250,3) (ypixel,xpixel,r/g/b)
@@ -35,7 +37,7 @@ def read_train_data():
         pond_masks.append(np.loadtxt(file).astype(int))
     return data_train,locs,labels,pond_masks
 
-
+@jit
 def write_train_data(data_train,locs,labels,pond_masks):
     ''' write original and labeled image as png
             data_train_original.png: original matrix as png
@@ -138,8 +140,9 @@ def read_custom_data(path,original=0):
 
 #%% viualization
 
+@jit
 def plot_train_labels(data_train,labels,locs):
-    ''' scatterplot target labels over training image (given, modified)
+    ''' scatterplot target labels over training image (given,modified)
     '''
     colors,ll = ['w','r','b','g'],[] # label colors
     plt.figure() # create figure object
@@ -154,8 +157,9 @@ def plot_train_labels(data_train,labels,locs):
     plt.show()
 
 
+@jit
 def plot_train_masks(N,pond_masks):
-    ''' generate and plot pond masks over empty figures (given, modified)
+    ''' generate and plot pond masks over empty figures (given,modified)
     '''
     decoded_masks = np.zeros((N,N,8+1)) # 0=all,1-8=standard ponds
     for i in range(8): # for every pond
@@ -173,6 +177,7 @@ def plot_train_masks(N,pond_masks):
 
 
 #%% feature extraction
+
 @jit
 def extract_features(data,win_y,win_x,nfeatures):
     ''' extract features from given image over sliding window
@@ -190,18 +195,31 @@ def extract_features(data,win_y,win_x,nfeatures):
         # ***** modify below - add features as desired ***** #
         # features[:,:,feature_iter+n] = f(windows,axis=(2,3)) #
         print(' computing features for',x,'color dimension')
+        # features[:,:,feature_iter+0] = np.mean(windows,axis=(2,3)) -- update to be self pixel
         features[:,:,feature_iter+0] = np.mean(windows,axis=(2,3))
         features[:,:,feature_iter+1] = np.median(windows,axis=(2,3))
         feature_iter += nfeatures
     return features
 
+@jit
+def convert_colorspace(data):
+    ''' converts rgb input image into desired color spaces
+            data - 3D image (2D image x color dimensions)
+    '''
+    HSV = np.array(mcolors.rgb_to_hsv(data/255)*255).astype(np.uint8)
+    GRY = np.array(0.2989*data[:,:,0]+0.5870*data[:,:,1]+0.1140*data[:,:,2]).astype(np.uint8)[:,:,None]
+    data = np.concatenate((data,HSV,GRY),axis=2)
+    return data
+
 #%%  main
 
 def main():
     
-    data_path='../data/data_train_matlab.png'
-    labeled_path='../data/data_train_matlab_labeled.png'
-    read_custom_data(labeled_path,data_path)
+	# note: if stuff crashes when you uncomment it below,
+	# try removing the @jit directive above the respective function
+    #data_path='../data/data_train_matlab.png'
+    #labeled_path='../data/data_train_matlab_labeled.png'
+    #read_custom_data(labeled_path,data_path)
     #data_train,locs,labels,pond_masks = read_train_data()
     #data_train = convert_colorspace(data_train)
     #write_train_data(data_train,locs,labels,pond_masks)
