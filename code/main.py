@@ -9,13 +9,14 @@ import scipy.io as spio # (given)
 
 import cv2, fileinput
 
-from skimage.feature import greycomatrix, greycoprops
-from skimage import data
+from matplotlib import colors as mcolors
 from numba import jit
 from roll import rolling_window
-from matplotlib import colors as mcolors
+from skimage import data
+from skimage.feature import greycomatrix, greycoprops
 
 RGB_FLAG = [255,0,255]
+
 
 #%% general data i/o
 
@@ -43,7 +44,7 @@ def read_train_data():
 
 @jit
 def write_train_data(data_train,locs,labels,pond_masks):
-    ''' write original and labeled image as png
+    ''' write original, car/pool labeled, and pond masked images as pngs
             data_train_original.png: original matrix as png
             data_train_labeled.png: pixel-level target label mask (0xFF00FF)
     '''
@@ -65,7 +66,7 @@ def write_train_data(data_train,locs,labels,pond_masks):
 
 @jit
 def test_label_flags(path, flags):
-    ''' verifies given custom labeling flags do not appear in the image
+    ''' verifies given custom label flags do not appear in an image
             path: filepath to original an image (unlabeled/untagged)
             flags: array of 3-tuples RGB
     '''
@@ -80,8 +81,10 @@ def test_label_flags(path, flags):
         if t.size is not 0:
             raise ValueError('Flag ' + f + ' found in image')
 
+@jit
 def read_custom_labels(path,original=0):
     ''' read in custom data labels from a labeled/tagged image
+		outputs text file in format given
     '''
     flags = [
         [0,255,0], # white car
@@ -177,8 +180,61 @@ def plot_train_masks(N,pond_masks):
     plt.imshow(decoded_masks[:,:,0])
     plt.show()
 
-#%% texture features
+#%% preprocessing
 
+@jit
+def convert_colorspace(data):
+    ''' converts rgb input image into desired color spaces
+            data - 3D image (2D image x color dimensions)
+    '''
+    HSV = np.array(mcolors.rgb_to_hsv(data/255)*255).astype(np.uint8)
+    GRY = np.array(0.2989*data[:,:,0]+0.5870*data[:,:,1]+0.1140*data[:,:,2]).astype(np.uint8)[:,:,None]
+    data = np.concatenate((data,HSV,GRY),axis=2)
+    return data
+
+@jit
+def denoise_colored_image(img):
+    ''' Denoising with Low Pass
+    img:    pass RGB image array
+    see https://docs.opencv.org/3.3.1/d5/d69/tutorial_py_non_local_means.html
+    for more info
+    '''
+    #img = cv2.imread(image_name)
+
+    dst = cv2.fastNlMeansDenoisingColored(img,None,10,10,7,21)
+    
+	# =============================================================================
+	#     plt.figure(3)
+	#     plt.subplot(121),plt.imshow(img)
+	#     plt.subplot(122),plt.imshow(dst)
+	#     plt.show()
+	#     cv2.imwrite('../data/data_train_denoised.png', dst[:,:,::-1])
+	# =============================================================================
+    return dst[:,:,::-1]
+
+@jit 
+def bilateral_filter(img):
+    #img = cv2.imread(image_name)
+    bil = cv2.bilateralFilter(img,9,75,75)
+    return bil
+
+@jit
+def canny(data,d,sigmaColor,sigmaSpace,minVal,maxVal):
+    ''' performs edge detection using canny filter
+            d: diameter of pixel neighborhoods used during filtering
+            sigmaColor: color space filter sigma
+                (larger values, more distinct colors will blur)
+            sigmaSpace: coordinate space filter sigma
+                (larger value, farther pixels will blur)
+            minVal: lower threshold (less significant edges are discarded)
+            maxVal: higher threshold (more significant edges are preserved)
+    '''
+    smooth = cv2.bilateralFilter(data,d,sigmaColor,sigmaSpace)
+    edges = cv2.Canny(smooth,minVal,maxVal,L2gradient=True)
+    data[edges>0,:] = RGB_FLAG
+    cv2.imwrite('../data/canny.png',data[:,:,::-1])
+
+@jit
 def cv_dft(img, HPF_size=60, sel_color=0, a=1, b=2):
     ''' FFT with High Pass
 		img:        grayscale 2D image array
@@ -230,30 +286,6 @@ def cv_dft(img, HPF_size=60, sel_color=0, a=1, b=2):
     
     return img_back
 
-def denoise_colored_image(img):
-    ''' Denoising with Low Pass
-    img:    pass RGB image array
-    see https://docs.opencv.org/3.3.1/d5/d69/tutorial_py_non_local_means.html
-    for more info
-    '''
-    #img = cv2.imread(image_name)
-
-    dst = cv2.fastNlMeansDenoisingColored(img,None,10,10,7,21)
-    
-	# =============================================================================
-	#     plt.figure(3)
-	#     plt.subplot(121),plt.imshow(img)
-	#     plt.subplot(122),plt.imshow(dst)
-	#     plt.show()
-	#     cv2.imwrite('../data/data_train_denoised.png', dst[:,:,::-1])
-	# =============================================================================
-    return dst[:,:,::-1]
-    
-def bilateral_filter(img):
-    #img = cv2.imread(image_name)
-    bil = cv2.bilateralFilter(img,9,75,75)
-    return bil
-
 #%% feature extraction
 
 @jit
@@ -279,33 +311,6 @@ def extract_features(data,win_y,win_x,nfeatures):
         feature_iter += nfeatures
     return features
 
-@jit
-def convert_colorspace(data):
-    ''' converts rgb input image into desired color spaces
-            data - 3D image (2D image x color dimensions)
-    '''
-    HSV = np.array(mcolors.rgb_to_hsv(data/255)*255).astype(np.uint8)
-    GRY = np.array(0.2989*data[:,:,0]+0.5870*data[:,:,1]+0.1140*data[:,:,2]).astype(np.uint8)[:,:,None]
-    data = np.concatenate((data,HSV,GRY),axis=2)
-    return data
-
-#%%  preprocessing
-    
-def segmentation_canny(data,d,sigmaColor,sigmaSpace,minVal,maxVal):
-    ''' performs edge detection using canny filter
-            d: diameter of pixel neighborhoods used during filtering
-            sigmaColor: color space filter sigma
-                (larger values, more distinct colors will blur)
-            sigmaSpace: coordinate space filter sigma
-                (larger value, farther pixels will blur)
-            minVal: lower threshold (less significant edges are discarded)
-            maxVal: higher threshold (more significant edges are preserved)
-    '''
-    smooth = cv2.bilateralFilter(data,d,sigmaColor,sigmaSpace)
-    edges = cv2.Canny(smooth,minVal,maxVal,L2gradient=True)
-    data[edges>0,:] = RGB_FLAG
-    cv2.imwrite('../data/segmentation_canny.png',data[:,:,::-1])
-
 #%%  main
 
 def main():
@@ -315,7 +320,7 @@ def main():
     # read_custom_data(labeled_path,data_path)
     # data_train,locs,labels,pond_masks = read_train_data()
     # data_train = convert_colorspace(data_train)
-	# segmentation_canny(data_train.copy(),9,75,75,100,200)
+	# canny(data_train.copy(),9,75,75,100,200)
     # write_train_data(data_train,locs,labels,pond_masks)
     # plot_train_labels(data_train,labels,locs)
     # plot_train_masks(np.size(data_train,axis=0),pond_masks)
@@ -347,7 +352,6 @@ def main():
 	
 	# win_y, win_x, nfeatures = 7,7,2
 	# features = extract_features(colorData,win_y,win_x,nfeatures) # Extract Features from Color Space
-	
 
 if  __name__ == '__main__':
 	main()
