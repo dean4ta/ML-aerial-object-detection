@@ -9,6 +9,8 @@ import scipy.io as spio # (given)
 
 import cv2, fileinput
 
+from skimage.feature import greycomatrix, greycoprops
+from skimage import data
 from numba import jit
 from roll import rolling_window
 from matplotlib import colors as mcolors
@@ -55,9 +57,9 @@ def write_train_data(data_train,locs,labels,pond_masks):
         x = pond_masks[i][:,0]
         for j in range(np.size(pond_masks[i],axis=0)):
             data_train_masks[y[j],x[j],:] = [255,0,255]
-    cv2.imwrite('../data/data_train_original.png',data_train[:,:,::-1])
-    cv2.imwrite('../data/data_train_labels.png',data_train_labels[:,:,::-1])
-    cv2.imwrite('../data/data_train_masks.png',data_train_masks[:,:,::-1])
+    cv2.imwrite('data_train_original.png',data_train[:,:,::-1])
+    cv2.imwrite('data_train_labels.png',data_train_labels[:,:,::-1])
+    cv2.imwrite('data_train_masks.png',data_train_masks[:,:,::-1])
 
 @jit
 def test_for_labeling(path, flags):
@@ -175,6 +177,93 @@ def plot_train_masks(N,pond_masks):
     plt.imshow(decoded_masks[:,:,0])
     plt.show()
 
+#%% GLCM Texture Features
+# GLCM (Grey Level Co-occurrence Matrices)
+
+def glcm_texture():
+    a = 1;
+    return a
+
+#%% FFT (with HighPass Filter)
+
+def cv_dft(img, HPF_size=60, sel_color=0, a=1, b=2):
+    '''
+    img:        grayscale 2D image array
+    HPF_size:   High Pass Filter size of box to filter out (See magnitude spectrum)
+    sel_color:  Choose 0 for grayscale. Other reserved for fututre use
+    a:          Plot magnitude spectrum on plt.figure(a)
+    b:          Plot FT result on plt.figure(b)
+    '''
+    
+    
+    if sel_color == 0:
+        #img = cv2.imread(image_name,0) #convert to gray
+        dft = cv2.dft(np.float32(img),flags = cv2.DFT_COMPLEX_OUTPUT)
+        dft_shift = np.fft.fftshift(dft)
+        
+        magnitude_spectrum = 20*np.log(cv2.magnitude(dft_shift[:,:,0],dft_shift[:,:,1]))
+        
+        plt.figure(a)
+        plt.subplot(121),plt.imshow(img, cmap = 'gray')
+        plt.title('Input Image'), plt.xticks([]), plt.yticks([])
+        plt.subplot(122),plt.imshow(magnitude_spectrum, cmap = 'gray')
+        plt.title('Magnitude Spectrum'), plt.xticks([]), plt.yticks([])
+        plt.show()
+        
+        rows, cols = img.shape
+        crow,ccol = int(rows/2) , int(cols/2)
+        
+        # create a mask first, center square is 1, remaining all zeros
+        mask = np.ones((rows,cols,2),np.uint8)
+        mask[crow-HPF_size:crow+HPF_size, ccol-HPF_size:ccol+HPF_size] = 0
+        
+        # apply mask and inverse DFT
+        fshift = dft_shift*mask
+        f_ishift = np.fft.ifftshift(fshift)
+        img_back = cv2.idft(f_ishift)
+        img_back = cv2.magnitude(img_back[:,:,0],img_back[:,:,1])
+        
+        img_back = img_back/np.max(img_back)*255
+        
+        img_back = img_back**1.7
+        img_back255 = np.where(img_back > 255)
+        img_back[img_back255] = 255
+        
+        plt.figure(b)
+        plt.subplot(121),plt.imshow(img, cmap = 'gray')
+        plt.title('Input Image'), plt.xticks([]), plt.yticks([])
+        plt.subplot(122),plt.imshow(img_back, cmap = 'gray')
+        plt.title('Magnitude Spectrum'), plt.xticks([]), plt.yticks([])
+        plt.show()
+    
+    return img_back
+
+#%% Image Denoising ("low pass filter")
+
+def denoise_colored_image(img):
+    '''
+    img:    pass RGB image array
+    see https://docs.opencv.org/3.3.1/d5/d69/tutorial_py_non_local_means.html
+    for more info
+    '''
+    #img = cv2.imread(image_name)
+
+    dst = cv2.fastNlMeansDenoisingColored(img,None,10,10,7,21)
+    
+# =============================================================================
+#     plt.figure(3)
+#     plt.subplot(121),plt.imshow(img)
+#     plt.subplot(122),plt.imshow(dst)
+#     plt.show()
+#     cv2.imwrite('../data/data_train_denoised.png', dst[:,:,::-1])
+# =============================================================================
+    return dst[:,:,::-1]
+    
+    
+def bilateral_filter(img):
+    #img = cv2.imread(image_name)
+    bil = cv2.bilateralFilter(img,9,75,75)
+    return bil
 
 #%% feature extraction
 
@@ -182,8 +271,8 @@ def plot_train_masks(N,pond_masks):
 def extract_features(data,win_y,win_x,nfeatures):
     ''' extract features from given image over sliding window
             data - 3D image (2D image x color dimensions)
-            win_y - window height
-            win_x - window width
+            win_y - window height --MUST BE ODD
+            win_x - window width  --MUST BE ODD
     '''
     print('Running Feature Extractor...')
     N1,N2,C = np.shape(data)
@@ -200,6 +289,7 @@ def extract_features(data,win_y,win_x,nfeatures):
         features[:,:,feature_iter+1] = np.median(windows,axis=(2,3))
         feature_iter += nfeatures
     return features
+
 
 @jit
 def convert_colorspace(data):
@@ -227,7 +317,47 @@ def main():
     #plot_train_masks(np.size(data_train,axis=0),pond_masks)
     #features = extract_features(data_train,6,6,2)
 
+    # dft w/o denoising
+    # dft = cv_dft('../data/data_train_original.png',a=1,b=2)
+    # =============================================================================
+    # #dft w denoising
+    # denoise_colored_image('data_train_denoised.png')
+    # denoised_dft = cv_dft('data_train_denoised.png',a=3,b=4)
+    # =============================================================================
+    #dft w bilateral
+    # bilateral_filter('../data/data_train_denoised.png')
+    # denoised_dft = cv_dft('../data/data_train_denoised.png',a=3,b=4)
 
-if  __name__ == '__main__':
-    main()
+
+# =============================================================================
+# if  __name__ == '__main__':
+# 	main()
+# =============================================================================
+
+
+data_train,locs,labels,pond_masks = read_train_data()
+#convert to grayscale
+r, g, b = data_train[:,:,0], data_train[:,:,1], data_train[:,:,2]
+data_gray = 0.2989 * r + 0.5870 * g + 0.1140 * b
+data_gray = (np.round(data_gray)).astype(np.uint8)
+
+'''Get FT preprocess data'''
+data_dft = cv_dft(data_gray,a=1,b=2)
+
+denoised_data = denoise_colored_image(data_train)
+r, g, b = denoised_data[:,:,0], denoised_data[:,:,1], denoised_data[:,:,2]
+denoised_data = 0.2989 * r + 0.5870 * g + 0.1140 * b
+denoised_data = (np.round(denoised_data)).astype(np.uint8)
+
+denoised_data_dft = cv_dft(denoised_data,a=3,b=4)
+denoised_data_dft = (np.round(denoised_data_dft)).astype(np.uint8) #cast
+denoised_data_dft = denoised_data_dft[:,:,None] #make 3D
+
+colorData = np.concatenate((data_train, denoised_data_dft), axis=2) #add to color space
+
+# =============================================================================
+# '''Extract Features from Color Space'''
+# win_y, win_x, nfeatures = 7,7,2
+# features = extract_features(colorData,win_y,win_x,nfeatures)
+# =============================================================================
 
