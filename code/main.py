@@ -15,7 +15,9 @@ from numba import jit
 from roll import rolling_window
 from matplotlib import colors as mcolors
 
-#%% data i/o
+RGB_FLAG = [255,0,255]
+
+#%% general data i/o
 
 @jit
 def read_train_data():
@@ -51,18 +53,18 @@ def write_train_data(data_train,locs,labels,pond_masks):
         y = np.array(locs[labels==(i+1),1],dtype=int)
         x = np.array(locs[labels==(i+1),0],dtype=int)
         for j in range(np.size(locs[labels==(i+1)],axis=0)):
-            data_train_labels[y[j],x[j],:] = [255,0,255]
+            data_train_labels[y[j],x[j],:] = RGB_FLAG
     for i in range(8): # pond masks
         y = pond_masks[i][:,1]
         x = pond_masks[i][:,0]
         for j in range(np.size(pond_masks[i],axis=0)):
-            data_train_masks[y[j],x[j],:] = [255,0,255]
-    cv2.imwrite('data_train_original.png',data_train[:,:,::-1])
-    cv2.imwrite('data_train_labels.png',data_train_labels[:,:,::-1])
-    cv2.imwrite('data_train_masks.png',data_train_masks[:,:,::-1])
+    data_train_masks[y[j],x[j],:] = RGB_FLAG
+    cv2.imwrite('../data/data_train_original.png',data_train[:,:,::-1])
+    cv2.imwrite('../data/data_train_labels.png',data_train_labels[:,:,::-1])
+    cv2.imwrite('../data/data_train_masks.png',data_train_masks[:,:,::-1])
 
 @jit
-def test_for_labeling(path, flags):
+def test_label_flags(path, flags):
     ''' verifies given custom labeling flags do not appear in the image
             path: filepath to original an image (unlabeled/untagged)
             flags: array of 3-tuples RGB
@@ -78,7 +80,7 @@ def test_for_labeling(path, flags):
         if t.size is not 0:
             raise ValueError('Flag ' + f + ' found in image')
 
-def read_custom_data(path,original=0):
+def read_custom_labels(path,original=0):
     ''' read in custom data labels from a labeled/tagged image
     '''
     flags = [
@@ -139,7 +141,6 @@ def read_custom_data(path,original=0):
         fout.writelines(data[1:])
     print('labels written to ' + out)
     
-
 #%% viualization
 
 @jit
@@ -157,7 +158,6 @@ def plot_train_labels(data_train,labels,locs):
     plt.legend(ll,['White Car','Red Car','Pool','Pond'])
     plt.title('Training Data')
     plt.show()
-
 
 @jit
 def plot_train_masks(N,pond_masks):
@@ -177,24 +177,16 @@ def plot_train_masks(N,pond_masks):
     plt.imshow(decoded_masks[:,:,0])
     plt.show()
 
-#%% GLCM Texture Features
-# GLCM (Grey Level Co-occurrence Matrices)
-
-def glcm_texture():
-    a = 1;
-    return a
-
-#%% FFT (with HighPass Filter)
+#%% texture features
 
 def cv_dft(img, HPF_size=60, sel_color=0, a=1, b=2):
+    ''' FFT with High Pass
+		img:        grayscale 2D image array
+		HPF_size:   High Pass Filter size of box to filter out (See magnitude spectrum)
+		sel_color:  Choose 0 for grayscale. Other reserved for fututre use
+		a:          Plot magnitude spectrum on plt.figure(a)
+		b:          Plot FT result on plt.figure(b)
     '''
-    img:        grayscale 2D image array
-    HPF_size:   High Pass Filter size of box to filter out (See magnitude spectrum)
-    sel_color:  Choose 0 for grayscale. Other reserved for fututre use
-    a:          Plot magnitude spectrum on plt.figure(a)
-    b:          Plot FT result on plt.figure(b)
-    '''
-    
     
     if sel_color == 0:
         #img = cv2.imread(image_name,0) #convert to gray
@@ -238,10 +230,8 @@ def cv_dft(img, HPF_size=60, sel_color=0, a=1, b=2):
     
     return img_back
 
-#%% Image Denoising ("low pass filter")
-
 def denoise_colored_image(img):
-    '''
+    ''' Denoising with Low Pass
     img:    pass RGB image array
     see https://docs.opencv.org/3.3.1/d5/d69/tutorial_py_non_local_means.html
     for more info
@@ -250,15 +240,14 @@ def denoise_colored_image(img):
 
     dst = cv2.fastNlMeansDenoisingColored(img,None,10,10,7,21)
     
-# =============================================================================
-#     plt.figure(3)
-#     plt.subplot(121),plt.imshow(img)
-#     plt.subplot(122),plt.imshow(dst)
-#     plt.show()
-#     cv2.imwrite('../data/data_train_denoised.png', dst[:,:,::-1])
-# =============================================================================
+	# =============================================================================
+	#     plt.figure(3)
+	#     plt.subplot(121),plt.imshow(img)
+	#     plt.subplot(122),plt.imshow(dst)
+	#     plt.show()
+	#     cv2.imwrite('../data/data_train_denoised.png', dst[:,:,::-1])
+	# =============================================================================
     return dst[:,:,::-1]
-    
     
 def bilateral_filter(img):
     #img = cv2.imread(image_name)
@@ -290,7 +279,6 @@ def extract_features(data,win_y,win_x,nfeatures):
         feature_iter += nfeatures
     return features
 
-
 @jit
 def convert_colorspace(data):
     ''' converts rgb input image into desired color spaces
@@ -301,63 +289,65 @@ def convert_colorspace(data):
     data = np.concatenate((data,HSV,GRY),axis=2)
     return data
 
+#%%  preprocessing
+    
+def segmentation_canny(data,d,sigmaColor,sigmaSpace,minVal,maxVal):
+    ''' performs edge detection using canny filter
+            d: diameter of pixel neighborhoods used during filtering
+            sigmaColor: color space filter sigma
+                (larger values, more distinct colors will blur)
+            sigmaSpace: coordinate space filter sigma
+                (larger value, farther pixels will blur)
+            minVal: lower threshold (less significant edges are discarded)
+            maxVal: higher threshold (more significant edges are preserved)
+    '''
+    smooth = cv2.bilateralFilter(data,d,sigmaColor,sigmaSpace)
+    edges = cv2.Canny(smooth,minVal,maxVal,L2gradient=True)
+    data[edges>0,:] = RGB_FLAG
+    cv2.imwrite('../data/segmentation_canny.png',data[:,:,::-1])
+
 #%%  main
 
 def main():
     
-	# note: if stuff crashes when you uncomment it below,
-	# try removing the @jit directive above the respective function
-    #data_path='../data/data_train_matlab.png'
-    #labeled_path='../data/data_train_matlab_labeled.png'
-    #read_custom_data(labeled_path,data_path)
-    #data_train,locs,labels,pond_masks = read_train_data()
-    #data_train = convert_colorspace(data_train)
-    #write_train_data(data_train,locs,labels,pond_masks)
-    #plot_train_labels(data_train,labels,locs)
-    #plot_train_masks(np.size(data_train,axis=0),pond_masks)
-    #features = extract_features(data_train,6,6,2)
+	# data_path='../data/data_train_matlab.png'
+    # labeled_path='../data/data_train_matlab_labeled.png'
+    # read_custom_data(labeled_path,data_path)
+    # data_train,locs,labels,pond_masks = read_train_data()
+    # data_train = convert_colorspace(data_train)
+	# segmentation_canny(data_train.copy(),9,75,75,100,200)
+    # write_train_data(data_train,locs,labels,pond_masks)
+    # plot_train_labels(data_train,labels,locs)
+    # plot_train_masks(np.size(data_train,axis=0),pond_masks)
+    # features = extract_features(data_train,6,6,2)
 
-    # dft w/o denoising
-    # dft = cv_dft('../data/data_train_original.png',a=1,b=2)
-    # =============================================================================
-    # #dft w denoising
+    # dft = cv_dft('../data/data_train_original.png',a=1,b=2) # dft w/o denoising
     # denoise_colored_image('data_train_denoised.png')
-    # denoised_dft = cv_dft('data_train_denoised.png',a=3,b=4)
-    # =============================================================================
-    #dft w bilateral
+    # denoised_dft = cv_dft('data_train_denoised.png',a=3,b=4) # #dft w denoising
+	
     # bilateral_filter('../data/data_train_denoised.png')
-    # denoised_dft = cv_dft('../data/data_train_denoised.png',a=3,b=4)
+    # denoised_dft = cv_dft('../data/data_train_denoised.png',a=3,b=4) #dft w bilateral
 
+	# r, g, b = data_train[:,:,0], data_train[:,:,1], data_train[:,:,2]
+	# data_gray = 0.2989 * r + 0.5870 * g + 0.1140 * b
+	# data_gray = (np.round(data_gray)).astype(np.uint8) #convert to grayscale
 
-# =============================================================================
-# if  __name__ == '__main__':
-# 	main()
-# =============================================================================
+	# data_dft = cv_dft(data_gray,a=1,b=2) # Get FT preprocess data
 
+	# denoised_data = denoise_colored_image(data_train)
+	# r, g, b = denoised_data[:,:,0], denoised_data[:,:,1], denoised_data[:,:,2]
+	# denoised_data = 0.2989 * r + 0.5870 * g + 0.1140 * b
+	# denoised_data = (np.round(denoised_data)).astype(np.uint8)
 
-data_train,locs,labels,pond_masks = read_train_data()
-#convert to grayscale
-r, g, b = data_train[:,:,0], data_train[:,:,1], data_train[:,:,2]
-data_gray = 0.2989 * r + 0.5870 * g + 0.1140 * b
-data_gray = (np.round(data_gray)).astype(np.uint8)
+	# denoised_data_dft = cv_dft(denoised_data,a=3,b=4)
+	# denoised_data_dft = (np.round(denoised_data_dft)).astype(np.uint8) #cast
+	# denoised_data_dft = denoised_data_dft[:,:,None] #make 3D
 
-'''Get FT preprocess data'''
-data_dft = cv_dft(data_gray,a=1,b=2)
+	# colorData = np.concatenate((data_train, denoised_data_dft), axis=2) #add to color space
+	
+	# win_y, win_x, nfeatures = 7,7,2
+	# features = extract_features(colorData,win_y,win_x,nfeatures) # Extract Features from Color Space
+	
 
-denoised_data = denoise_colored_image(data_train)
-r, g, b = denoised_data[:,:,0], denoised_data[:,:,1], denoised_data[:,:,2]
-denoised_data = 0.2989 * r + 0.5870 * g + 0.1140 * b
-denoised_data = (np.round(denoised_data)).astype(np.uint8)
-
-denoised_data_dft = cv_dft(denoised_data,a=3,b=4)
-denoised_data_dft = (np.round(denoised_data_dft)).astype(np.uint8) #cast
-denoised_data_dft = denoised_data_dft[:,:,None] #make 3D
-
-colorData = np.concatenate((data_train, denoised_data_dft), axis=2) #add to color space
-
-# =============================================================================
-# '''Extract Features from Color Space'''
-# win_y, win_x, nfeatures = 7,7,2
-# features = extract_features(colorData,win_y,win_x,nfeatures)
-# =============================================================================
-
+if  __name__ == '__main__':
+	main()
