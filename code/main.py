@@ -9,8 +9,6 @@ import scipy.io as spio # (given)
 
 import cv2
 
-from skimage.segmentation import felzenszwalb, quickshift
-
 RGB_FLAG = [255,0,255]
 
 #%% general data i/o
@@ -109,39 +107,8 @@ def segmentation_canny(data,d,sigmaColor,sigmaSpace,minVal,maxVal):
     '''
     smooth = cv2.bilateralFilter(data,d,sigmaColor,sigmaSpace)
     edges = cv2.Canny(smooth,minVal,maxVal,L2gradient=True)
-    # todo - close open canny contours for better segmentation
     data[edges>0,:] = RGB_FLAG
     cv2.imwrite('../data/segmentation_canny.png',data[:,:,::-1])
-
-
-def segmentation_felzenszwalb(data,scale,sigma,min_size,\
-    d,sigmaColor,sigmaSpace,minVal,maxVal):
-    ''' performs segmentation using felzenszwalb
-            scale: higher value, larger clusters
-            sigma: gaussian filter width
-            min_size: min component size
-            <canny params, refer to segmentation_canny()>
-    '''
-    segments = 0 # felzenszwalb(data,scale,sigma,min_size)
-    edges = cv2.Canny(segments,minVal,maxVal,L2gradient=True)
-    data[edges>0,:] = RGB_FLAG
-    cv2.imwrite('../data/segmentation_felzenszwalb.png',data[:,:,::-1])
-
-
-def segmentation_quickshift(data,ratio,kernel_size,max_dist,return_tree,sigma,\
-    d,sigmaColor,sigmaSpace,minVal,maxVal):
-    ''' performs segmentation using quickshift
-            ratio: 
-            kernel_size: 
-            max_dist: 
-            return_tree: 
-            sigma: 
-            <canny params, refer to segmentation_canny()>
-    '''
-    segments = 0 # quickshift(data,)
-    edges = cv2.Canny(segments,minVal,maxVal,L2gradient=True)
-    data[edges>0,:] = RGB_FLAG
-    cv2.imwrite('../data/segmentation_quickshift.png',data[:,:,::-1])
 
 
 #%%  main
@@ -154,8 +121,6 @@ def main():
     plot_train_masks(np.size(data_train,axis=0),pond_masks)
     
     segmentation_canny(data_train.copy(),9,75,75,100,200)
-    #segmentation_felzenszwalb(data_train.copy(),3,.95,5,9,75,75,100,200)
-    #segmentation_quickshift(data_train.copy(),1.0,5,10,False,0,9,75,75,100,200)
 
 
 if  __name__ == '__main__':
