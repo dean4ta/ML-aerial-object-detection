@@ -7,296 +7,82 @@ import numpy as np # (given)
 import matplotlib.pyplot as plt # (given)
 import scipy.io as spio # (given)
 
-import cv2, fileinput
+import cv2
 
-from matplotlib import colors as mcolors
-from numba import jit
 from roll import rolling_window
-from skimage import data
-from skimage.feature import greycomatrix, greycoprops
 
-RGB_FLAG = [255,0,255]
+#%% load data
 
-
-#%% general data i/o
-
-@jit
-def read_train_data():
+def load_train_data():
     ''' loads provided training data from 'data' folder in root directory
             data_train: (6250,6250,3) (ypixel,xpixel,r/g/b)
             locs: (112,2) (index,xpixel/ypixel)
             labels: (112,1) (index,label)
             pond_masks: (?,2) (index,xpixel/ypixel)
+        ex) data_train,locs,labels,pond_masks = read_train_data()
     '''
     # load data_train.mat: format - <y>,<x>,<r,g,b>
     mat = spio.loadmat('../data/data_train.mat') # load mat object
     data_train = mat.get('data_train') # extract image struct from mat object
     # load labels.txt: format - <x> <y> <label>
-    pairs = np.loadtxt('../data/labels.txt').astype(int) # load label matrix
+    pairs = np.loadtxt('../data/labels.txt').astype(np.uint16) # load label matrix
     locs = pairs[:,0:2] # <x> <y> pixel indices
-    labels = pairs[:,2] # <label> 1=whitecar,2=redcar,3=pool,4=pond
+    labels = pairs[:,2].astype(np.uint8) # <label> 1=whitecar,2=redcar,3=pool,4=pond
     # load pond#.txt masks: format - <x> <y>
     pond_masks = []
     for i in range(8):
         file = '../data/pond'+str(i+1)+'.txt'
-        pond_masks.append(np.loadtxt(file).astype(int))
+        pond_masks.append(np.loadtxt(file).astype(np.uint16))
     return data_train,locs,labels,pond_masks
-
-@jit
-def write_train_data(data_train,locs,labels,pond_masks):
-    ''' write original, car/pool labeled, and pond masked images as pngs
-            data_train_original.png: original matrix as png
-            data_train_labeled.png: pixel-level target label mask (0xFF00FF)
-    '''
-    data_train_labels = data_train.copy() # copy training image
-    data_train_masks = data_train.copy() # copy training image
-    for i in range(len(np.unique(labels))): # unique pixel labels
-        y = np.array(locs[labels==(i+1),1],dtype=int)
-        x = np.array(locs[labels==(i+1),0],dtype=int)
-        for j in range(np.size(locs[labels==(i+1)],axis=0)):
-            data_train_labels[y[j],x[j],:] = RGB_FLAG
-    for i in range(8): # pond masks
-        y = pond_masks[i][:,1]
-        x = pond_masks[i][:,0]
-        for j in range(np.size(pond_masks[i],axis=0)):
-    data_train_masks[y[j],x[j],:] = RGB_FLAG
-    cv2.imwrite('../data/data_train_original.png',data_train[:,:,::-1])
-    cv2.imwrite('../data/data_train_labels.png',data_train_labels[:,:,::-1])
-    cv2.imwrite('../data/data_train_masks.png',data_train_masks[:,:,::-1])
-
-@jit
-def test_label_flags(path, flags):
-    ''' verifies given custom label flags do not appear in an image
-            path: filepath to original an image (unlabeled/untagged)
-            flags: array of 3-tuples RGB
-    '''
-    im = cv2.imread(path)[:,:,::-1]
-    N1,N2,C = np.shape(im)
-    im = im.reshape((N1*N2,C))
-    for f in flags:
-        R = np.where(im[:,0]==f[0])
-        G = np.where(im[:,1]==f[1])
-        B = np.where(im[:,2]==f[2])
-        t = np.intersect1d(R,np.intersect1d(G,B))
-        if t.size is not 0:
-            raise ValueError('Flag ' + f + ' found in image')
-
-@jit
-def read_custom_labels(path,original=0):
-    ''' read in custom data labels from a labeled/tagged image
-		outputs text file in format given
-    '''
-    flags = [
-        [0,255,0], # white car
-        [0,255,255], # red car
-        [255,255,0], # pool
-        [255,0,0], # pond
-        # [255,0,255], # reserved for existing labels
-        # [0,0,255], # unused, open to special tag
-    ]
-    
-    if original is not 0:
-        print('validating flags...')
-        test_for_labeling(original,flags)
-        print('flags validated')
-    
-    im = cv2.imread(path)[:,:,::-1]
-    agg = np.asarray(['\n'], dtype='|S11')
-    
-    print('parsing labels...')
-    label_ind = 1
-    for f in flags:
-        tmp = np.asarray(np.where(im[:,:,0]==f[0]),dtype='|S4').T
-        delim = np.repeat(' ',tmp.shape[0]).astype(dtype='|S1')
-        R = np.core.defchararray.add(tmp[:,1], delim)
-        R = np.core.defchararray.add(R, tmp[:,0])
-        
-        tmp = np.asarray(np.where(im[:,:,1]==f[1]),dtype='|S4').T
-        delim = np.repeat(' ',tmp.shape[0]).astype(dtype='|S1')
-        G = np.core.defchararray.add(tmp[:,1], delim)
-        G = np.core.defchararray.add(G, tmp[:,0])
-        
-        tmp = np.asarray(np.where(im[:,:,2]==f[2]),dtype='|S4').T
-        delim = np.repeat(' ',tmp.shape[0]).astype(dtype='|S1')
-        B = np.core.defchararray.add(tmp[:,1], delim)
-        B = np.core.defchararray.add(B, tmp[:,0])
-        
-        tmp = np.intersect1d(np.intersect1d(R,G),B)
-        label = np.repeat(' '+str(label_ind),tmp.shape[0]).astype(dtype='|S2')
-        tmp = np.core.defchararray.add(tmp, label)
-        if tmp.size is 0:
-            tmp = np.asarray(['\n'],dtype='|S11')
-        agg = np.concatenate((agg,tmp))
-        label_ind += 1
-    
-    out = '../data/custom_labels.txt'
-    np.savetxt(out,agg,fmt='%s',newline='\n')
-    with fileinput.FileInput(out,inplace=True) as file:
-        for line in file:
-            if line == 'b\'\\n\'':
-                print(line.replace('b\'\\n\'',''),end='')
-            if line == '\\n':
-                print(line.replace('\\n',''),end='')
-            print(line.replace('b','').replace('\'',''),end='')
-    with open(out, 'r') as fin:
-        data = fin.read().splitlines(True)
-    with open(out, 'w') as fout:
-        fout.writelines(data[1:])
-    print('labels written to ' + out)
-    
-#%% viualization
-
-@jit
-def plot_train_labels(data_train,labels,locs):
-    ''' scatterplot target labels over training image (given,modified)
-    '''
-    colors,ll = ['w','r','b','g'],[] # label colors
-    plt.figure() # create figure object
-    plt.imshow(data_train) # add training image (background)
-    for i in range(len(np.unique(labels))): # add labels (scatter plotted)
-        x = locs[labels==(i+1),0]
-        y = locs[labels==(i+1),1]
-        lbl = plt.scatter(x,y,c=colors[i])
-        ll = np.append(ll,lbl)
-    plt.legend(ll,['White Car','Red Car','Pool','Pond'])
-    plt.title('Training Data')
-    plt.show()
-
-@jit
-def plot_train_masks(N,pond_masks):
-    ''' generate and plot pond masks over empty figures (given,modified)
-    '''
-    decoded_masks = np.zeros((N,N,8+1)) # 0=all,1-8=standard ponds
-    for i in range(8): # for every pond
-        x = pond_masks[i][:,0]
-        y = pond_masks[i][:,1]
-        for j in range(np.size(pond_masks[i],axis=0)): # for every pixel label
-            decoded_masks[y[j],x[j],0] = 1 # mark aggregate (0)
-            decoded_masks[y[j],x[j],i+1] = 1 # mark individual (1-8)
-        plt.title('Pond '+str(i+1))
-        plt.imshow(decoded_masks[:,:,i])
-        plt.show()
-    plt.title('Ponds (All)')
-    plt.imshow(decoded_masks[:,:,0])
-    plt.show()
 
 #%% preprocessing
 
-@jit
-def convert_colorspace(data):
-    ''' converts rgb input image into desired color spaces
-            data - 3D image (2D image x color dimensions)
-    '''
-    HSV = np.array(mcolors.rgb_to_hsv(data/255)*255).astype(np.uint8)
-    GRY = np.array(0.2989*data[:,:,0]+0.5870*data[:,:,1]+0.1140*data[:,:,2]).astype(np.uint8)[:,:,None]
-    data = np.concatenate((data,HSV,GRY),axis=2)
-    return data
-
-@jit
-def denoise_colored_image(img):
-    ''' Denoising with Low Pass
-    img:    pass RGB image array
-    see https://docs.opencv.org/3.3.1/d5/d69/tutorial_py_non_local_means.html
-    for more info
-    '''
-    #img = cv2.imread(image_name)
-
-    dst = cv2.fastNlMeansDenoisingColored(img,None,10,10,7,21)
-    
-	# =============================================================================
-	#     plt.figure(3)
-	#     plt.subplot(121),plt.imshow(img)
-	#     plt.subplot(122),plt.imshow(dst)
-	#     plt.show()
-	#     cv2.imwrite('../data/data_train_denoised.png', dst[:,:,::-1])
-	# =============================================================================
-    return dst[:,:,::-1]
-
-@jit 
-def bilateral_filter(img):
-    #img = cv2.imread(image_name)
-    bil = cv2.bilateralFilter(img,9,75,75)
-    return bil
-
-@jit
-def canny(data,d,sigmaColor,sigmaSpace,minVal,maxVal):
+def get_canny(data,d=9,σColor=75,σSpace=75,minVal=100,maxVal=200):
     ''' performs edge detection using canny filter
             d: diameter of pixel neighborhoods used during filtering
-            sigmaColor: color space filter sigma
-                (larger values, more distinct colors will blur)
-            sigmaSpace: coordinate space filter sigma
-                (larger value, farther pixels will blur)
-            minVal: lower threshold (less significant edges are discarded)
-            maxVal: higher threshold (more significant edges are preserved)
+            σColor: color space filter σ (larger -> more distinct colors will blur)
+            σSpace: coord space filter σ (larger -> more distant pixels will blur)
+            minVal: low threshold (less significant edges are discarded)
+            maxVal: high threshold (more significant edges are preserved)
     '''
-    smooth = cv2.bilateralFilter(data,d,sigmaColor,sigmaSpace)
-    edges = cv2.Canny(smooth,minVal,maxVal,L2gradient=True)
-    data[edges>0,:] = RGB_FLAG
-    cv2.imwrite('../data/canny.png',data[:,:,::-1])
+    return cv2.Canny(cv2.bilateralFilter(data,d,σColor,σSpace),minVal,maxVal,L2gradient=True)
 
-@jit
-def cv_dft(img, HPF_size=60, sel_color=0, a=1, b=2):
-    ''' FFT with High Pass
-		img:        grayscale 2D image array
-		HPF_size:   High Pass Filter size of box to filter out (See magnitude spectrum)
-		sel_color:  Choose 0 for grayscale. Other reserved for fututre use
-		a:          Plot magnitude spectrum on plt.figure(a)
-		b:          Plot FT result on plt.figure(b)
+def get_fourier(data,HPF_size=60):
+    ''' Perofrms a DFT and high pass filtering
+        data: grayscale 2D image array
+        HPF_size: High Pass Filter size of box to filter out
     '''
+    r,c,d = np.shape(data)
+    rcenter,ccenter = int(r/2),int(c/2)
+    # data = cv2.fastNlMeansDenoising(data,None,10,7,21)
     
-    if sel_color == 0:
-        #img = cv2.imread(image_name,0) #convert to gray
-        dft = cv2.dft(np.float32(img),flags = cv2.DFT_COMPLEX_OUTPUT)
-        dft_shift = np.fft.fftshift(dft)
-        
-        magnitude_spectrum = 20*np.log(cv2.magnitude(dft_shift[:,:,0],dft_shift[:,:,1]))
-        
-        plt.figure(a)
-        plt.subplot(121),plt.imshow(img, cmap = 'gray')
-        plt.title('Input Image'), plt.xticks([]), plt.yticks([])
-        plt.subplot(122),plt.imshow(magnitude_spectrum, cmap = 'gray')
-        plt.title('Magnitude Spectrum'), plt.xticks([]), plt.yticks([])
-        plt.show()
-        
-        rows, cols = img.shape
-        crow,ccol = int(rows/2) , int(cols/2)
-        
-        # create a mask first, center square is 1, remaining all zeros
-        mask = np.ones((rows,cols,2),np.uint8)
-        mask[crow-HPF_size:crow+HPF_size, ccol-HPF_size:ccol+HPF_size] = 0
-        
-        # apply mask and inverse DFT
-        fshift = dft_shift*mask
-        f_ishift = np.fft.ifftshift(fshift)
-        img_back = cv2.idft(f_ishift)
-        img_back = cv2.magnitude(img_back[:,:,0],img_back[:,:,1])
-        
-        img_back = img_back/np.max(img_back)*255
-        
-        img_back = img_back**1.7
-        img_back255 = np.where(img_back > 255)
-        img_back[img_back255] = 255
-        
-        plt.figure(b)
-        plt.subplot(121),plt.imshow(img, cmap = 'gray')
-        plt.title('Input Image'), plt.xticks([]), plt.yticks([])
-        plt.subplot(122),plt.imshow(img_back, cmap = 'gray')
-        plt.title('Magnitude Spectrum'), plt.xticks([]), plt.yticks([])
-        plt.show()
     
-    return img_back
+    mask = np.ones((r,c,2),np.uint8)
+    mask[rcenter-HPF_size:rcenter+HPF_size,ccenter-HPF_size:ccenter+HPF_size] = 0
+    fshift = dft_shift*mask
+    f_ishift = np.fft.ifftshift(fshift)
+    img_back = cv2.idft(f_ishift)
+    img_back = cv2.magnitude(img_back[:,:,0],img_back[:,:,1])
+    
+    dft = cv2.dft(np.float32(data),flags=cv2.DFT_COMPLEX_OUTPUT)
+    dft = np.fft.fftshift(dft)
+    dft[rcenter-HPF_size:rcenter+HPF_size,ccenter-HPF_size:ccenter+HPF_size] = 0
+    return cv2.idft(np.fft.ifftshift(dft))
+    '''
+    data = (data/np.max(data)*255)**1.7
+    data[np.where(data>255)] = 255
+    return data'''
 
 #%% feature extraction
 
-@jit
-def extract_features(data,win_y,win_x,nfeatures):
+def extract_features(data,win_y,win_x):
     ''' extract features from given image over sliding window
             data - 3D image (2D image x color dimensions)
-            win_y - window height --MUST BE ODD
-            win_x - window width  --MUST BE ODD
+            win_y - window height SHOULD BE ODD
+            win_x - window width  SHOULD BE ODD
     '''
-    print('Running Feature Extractor...')
     N1,N2,C = np.shape(data)
+    '''
     features = np.zeros((N1-win_y+1,N2-win_x+1,C*nfeatures))
     feature_iter = 0
     for x in range(C):
@@ -309,49 +95,43 @@ def extract_features(data,win_y,win_x,nfeatures):
         features[:,:,feature_iter+0] = np.mean(windows,axis=(2,3))
         features[:,:,feature_iter+1] = np.median(windows,axis=(2,3))
         feature_iter += nfeatures
+    '''
+    color_hist = cv2.calcHist(windows,np.arange(C),None,[8],[0,255])
+    
     return features
 
 #%%  main
 
 def main():
     
-	# data_path='../data/data_train_matlab.png'
-    # labeled_path='../data/data_train_matlab_labeled.png'
-    # read_custom_data(labeled_path,data_path)
-    # data_train,locs,labels,pond_masks = read_train_data()
-    # data_train = convert_colorspace(data_train)
-	# canny(data_train.copy(),9,75,75,100,200)
-    # write_train_data(data_train,locs,labels,pond_masks)
-    # plot_train_labels(data_train,labels,locs)
-    # plot_train_masks(np.size(data_train,axis=0),pond_masks)
-    # features = extract_features(data_train,6,6,2)
-
+    data,locs,labels,pond_masks = load_train_data()
+    
+    hsv = cv2.cvtColor(data,cv2.COLOR_RGB2HSV)
+    gray = cv2.cvtColor(data,cv2.COLOR_RGB2GRAY)[:,:,None]
+    canny = get_canny(data)[:,:,None]
+    fourier = get_fourier(data)
+    data = np.concatenate((data,hsv,gray,canny,fourier),axis=2)
+    hsv,gray,canny,fourier = 0,0,0,0
+    np.save('../data/data_preproc.mat',data)
+    data = np.load('../data/data_preproc.mat')
+    
+    extract_features(data,)
+    # np.save('../data/data_features.mat',features)
+    # features = np.load('../data/data_features.mat')
+    
+    
     # dft = cv_dft('../data/data_train_original.png',a=1,b=2) # dft w/o denoising
     # denoise_colored_image('data_train_denoised.png')
     # denoised_dft = cv_dft('data_train_denoised.png',a=3,b=4) # #dft w denoising
-	
-    # bilateral_filter('../data/data_train_denoised.png')
+    # cv2.bilateralFilter('../data/data_train_denoised.png',9,75,75)
     # denoised_dft = cv_dft('../data/data_train_denoised.png',a=3,b=4) #dft w bilateral
+    # data_dft = cv_dft(data_gray,a=1,b=2) # Get FT preprocess data
+    # denoised_data = np.arrya(denoise_colored_image(data_train)).astype(np.uint8)
+    # denoised_data_dft = np.array(cv_dft(denoised_data,a=3,b=4)).astype(np.uint8)[:,:,None]
 
-	# r, g, b = data_train[:,:,0], data_train[:,:,1], data_train[:,:,2]
-	# data_gray = 0.2989 * r + 0.5870 * g + 0.1140 * b
-	# data_gray = (np.round(data_gray)).astype(np.uint8) #convert to grayscale
-
-	# data_dft = cv_dft(data_gray,a=1,b=2) # Get FT preprocess data
-
-	# denoised_data = denoise_colored_image(data_train)
-	# r, g, b = denoised_data[:,:,0], denoised_data[:,:,1], denoised_data[:,:,2]
-	# denoised_data = 0.2989 * r + 0.5870 * g + 0.1140 * b
-	# denoised_data = (np.round(denoised_data)).astype(np.uint8)
-
-	# denoised_data_dft = cv_dft(denoised_data,a=3,b=4)
-	# denoised_data_dft = (np.round(denoised_data_dft)).astype(np.uint8) #cast
-	# denoised_data_dft = denoised_data_dft[:,:,None] #make 3D
-
-	# colorData = np.concatenate((data_train, denoised_data_dft), axis=2) #add to color space
-	
-	# win_y, win_x, nfeatures = 7,7,2
-	# features = extract_features(colorData,win_y,win_x,nfeatures) # Extract Features from Color Space
+    ## feature extraction
+    # features = extract_features(data_train,6,6,2)
+    # features = extract_features(colorData,win_y,win_x,nfeatures) # Extract Features from Color Space
 
 if  __name__ == '__main__':
-	main()
+    main()
