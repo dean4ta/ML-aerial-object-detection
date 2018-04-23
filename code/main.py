@@ -6,200 +6,112 @@
 import numpy as np # (given)
 import matplotlib.pyplot as plt # (given)
 import scipy.io as spio # (given)
-import copy
-
-import cv2
-
+import copy,cv2,util,roll
 from numba import jit
-from roll import rolling_window
 from sklearn.metrics import f1_score
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 
-#%% data i/o
+#%% load data
 
-def read_train_data():
+@jit
+def load_train_data():
     ''' loads provided training data from 'data' folder in root directory
             data_train: (6250,6250,3) (ypixel,xpixel,r/g/b)
             locs: (112,2) (index,xpixel/ypixel)
             labels: (112,1) (index,label)
             pond_masks: (?,2) (index,xpixel/ypixel)
+        ex) data_train,locs,labels,pond_masks = read_train_data()
     '''
     # load data_train.mat: format - <y>,<x>,<r,g,b>
     mat = spio.loadmat('../data/data_train.mat') # load mat object
     data_train = mat.get('data_train') # extract image struct from mat object
     # load labels.txt: format - <x> <y> <label>
-    pairs = np.loadtxt('../data/labels.txt').astype(int) # load label matrix
+    pairs = np.loadtxt('../data/labels.txt').astype(np.uint16) # load label matrix
     locs = pairs[:,0:2] # <x> <y> pixel indices
-    labels = pairs[:,2] # <label> 1=whitecar,2=redcar,3=pool,4=pond
+    labels = pairs[:,2].astype(np.uint8) # <label> 1=whitecar,2=redcar,3=pool,4=pond
     # load pond#.txt masks: format - <x> <y>
     pond_masks = []
     for i in range(8):
         file = '../data/pond'+str(i+1)+'.txt'
-        pond_masks.append(np.loadtxt(file).astype(int))
+        pond_masks.append(np.loadtxt(file).astype(np.uint16))
     return data_train,locs,labels,pond_masks
 
+#%% preprocessing
 
-def write_train_data(data_train,locs,labels,pond_masks):
-    ''' write original and labeled image as png
-            data_train_original.png: original matrix as png
-            data_train_labeled.png: pixel-level target label mask (0xFF00FF)
+@jit
+def get_canny(data,d=9,σColor=75,σSpace=75,minVal=100,maxVal=200):
+    ''' performs edge detection using canny filter
+            d: diameter of pixel neighborhoods used during filtering
+            σColor: color space filter σ (larger -> more distinct colors will blur)
+            σSpace: coord space filter σ (larger -> more distant pixels will blur)
+            minVal: low threshold (less significant edges are discarded)
+            maxVal: high threshold (more significant edges are preserved)
     '''
-    data_train_labels = data_train.copy() # copy training image
-    data_train_masks = data_train.copy() # copy training image
-    for i in range(len(np.unique(labels))): # unique pixel labels
-        y = np.array(locs[labels==(i+1),1],dtype=int)
-        x = np.array(locs[labels==(i+1),0],dtype=int)
-        for j in range(np.size(locs[labels==(i+1)],axis=0)):
-            data_train_labels[y[j],x[j],:] = [255,0,255]
-    for i in range(8): # pond masks
-        y = pond_masks[i][:,1]
-        x = pond_masks[i][:,0]
-        for j in range(np.size(pond_masks[i],axis=0)):
-            data_train_masks[y[j],x[j],:] = [255,0,255]
-    cv2.imwrite('../data/data_train_original.png',data_train[:,:,::-1])
-    cv2.imwrite('../data/data_train_labels.png',data_train_labels[:,:,::-1])
-    cv2.imwrite('../data/data_train_masks.png',data_train_masks[:,:,::-1])
-    
-def write_pred_data(data_train,labels):
-    ''' write labeled image as png
-            data_pred_labeled.png: pixel-level target label mask (0xFF00FF)
+    return cv2.Canny(cv2.bilateralFilter(data,d,σColor,σSpace),minVal,maxVal,L2gradient=True)
+
+@jit
+def get_fourier(data,HPF_size=60):
+    ''' Perofrms a DFT and high pass filtering
+        data: grayscale 2D image array
+        HPF_size: High Pass Filter size of box to filter out
     '''
-    data_pred_labels = data_train.copy() # copy training image
-    N1, N2 = np.shape(labels)
-    for i in range(N1):
-        for j in range(N2):
-            if labels[i,j] != -1:
-               data_pred_labels[i,j,:] = [255,0,255] 
-              
-               
-    cv2.imwrite('../data/data_pred_labels.png',data_pred_labels[:,:,::-1])
-    
-
-def write_train_data_pixels(data_train,locs,labels,pond_masks):
-    ''' write original and labeled image as png
-            data_train_original.png: original matrix as png
-            data_train_labeled.png: pixel-level target label mask (0xFF00FF)
-    '''
-    N1, N2, C = np.shape(data_train)
-    data_train_labels = data_train.copy() # copy training image
-    '''
-        Background class label = -1
-    '''
-    pixel_class_labels = np.array(np.ones((N1, N2)))
-    pixel_class_labels *= -1
-
-    
-    for i in range(len(np.unique(labels))): # unique pixel labels
-        y = np.array(locs[labels==(i+1),1],dtype=int)
-        x = np.array(locs[labels==(i+1),0],dtype=int)
-        for j in range(np.size(locs[labels==(i+1)],axis=0)):
-            for x_halo in range(-4,4):
-                for y_halo in range(-4,4):
-                    data_train_labels[y[j] + y_halo, x[j] + x_halo,:] = [255,0,255]
-                    pixel_class_labels[y[j] + y_halo, x[j] + x_halo] = i +1
-                        
-    for i in range(8): # pond masks
-        y = pond_masks[i][:,1]
-        x = pond_masks[i][:,0]
-        for j in range(np.size(pond_masks[i],axis=0)):
-            data_train_labels[y[j],x[j],:] = [255,0,255]
-            pixel_class_labels[y[j],x[j]] = 4
-    cv2.imwrite('../data/data_train_original.png',data_train[:,:,::-1])
-    cv2.imwrite('../data/data_train_labels.png',data_train_labels[:,:,::-1])
-    
-    return pixel_class_labels
-
-
-#%% viualization
-
-def plot_train_labels(data_train,labels,locs):
-    ''' scatterplot target labels over training image (given, modified)
-    '''
-    colors,ll = ['w','r','b','g'],[] # label colors
-    plt.figure() # create figure object
-    plt.imshow(data_train) # add training image (background)
-    for i in range(len(np.unique(labels))): # add labels (scatter plotted)
-        x = locs[labels==(i+1),0]
-        y = locs[labels==(i+1),1]
-        lbl = plt.scatter(x,y,c=colors[i])
-        ll = np.append(ll,lbl)
-    plt.legend(ll,['White Car','Red Car','Pool','Pond'])
-    plt.title('Training Data')
-    plt.show()
-
-
-def plot_train_masks(N,pond_masks):
-    ''' generate and plot pond masks over empty figures (given, modified)
-    '''
-    decoded_masks = np.zeros((N,N,8+1)) # 0=all,1-8=standard ponds
-    for i in range(8): # for every pond
-        x = pond_masks[i][:,0]
-        y = pond_masks[i][:,1]
-        for j in range(np.size(pond_masks[i],axis=0)): # for every pixel label
-            decoded_masks[y[j],x[j],0] = 1 # mark aggregate (0)
-            decoded_masks[y[j],x[j],i+1] = 1 # mark individual (1-8)
-        plt.title('Pond '+str(i+1))
-        plt.imshow(decoded_masks[:,:,i])
-        plt.show()
-    plt.title('Ponds (All)')
-    plt.imshow(decoded_masks[:,:,0])
-    plt.show()
-
+    r,c = int(data.shape[0]/2),int(data.shape[1]/2)
+    data = cv2.fastNlMeansDenoising(data,None,10,7,21)
+    data = np.fft.fftshift(cv2.dft(np.float32(data),flags=cv2.DFT_COMPLEX_OUTPUT))
+    data[r-HPF_size:r+HPF_size,c-HPF_size:c+HPF_size] = 0
+    data = cv2.idft(np.fft.ifftshift(data))
+    data = (data/np.max(data)*255)**2
+    data[np.where(data>255)] = 255
+    return (data).astype(np.uint8)
 
 #%% feature extraction
+
 @jit
-def extract_features(data,win_y,win_x,nfeatures):
-    ''' extract features from given image over sliding window
-            data - 3D image (2D image x color dimensions)
-            win_y - window height
-            win_x - window width
-    '''
-    print('Running Feature Extractor...')
-    N1,N2,C = np.shape(data)
-    features = np.zeros((N1-win_y+1,N2-win_x+1,C*nfeatures))
-    feature_iter = 0
-    for x in range(C):
-        print(' computing sliding windows for',x,'color dimension')
-        windows = rolling_window(data[:,:,x],(win_y,win_x))
-        # ***** modify below - add features as desired ***** #
-        # features[:,:,feature_iter+n] = f(windows,axis=(2,3)) #
-        print(' computing features for',x,'color dimension')
-        features[:,:,feature_iter+0] = np.mean(windows,axis=(2,3))
-        features[:,:,feature_iter+1] = np.median(windows,axis=(2,3))
-        feature_iter += nfeatures
-    print(' padding feature output to match image input dimension')  
-    features = np.pad(features,((int(win_x/2) ,int(win_x/2)),(int(win_y/2) ,int(win_y/2)),(int(0), int(0))),mode = 'edge')
-        
+def extract_features(data,win_y=15,win_x=15):
+    N1,N2,D = np.shape(data)
+    features = np.zeros((N1,N2,8*D)).astype(np.uint8)
+    for i in range(N1-win_y):
+        print('iter '+str(i))
+        windows = roll.window(data[i:win_y+i,:,0],(win_y,win_x)).astype(np.uint16)
+        windows = np.concatenate((windows,1*255+roll.window(data[i:win_y+i,:,1],(win_y,win_x))),axis=3)
+        windows = np.concatenate((windows,2*255+roll.window(data[i:win_y+i,:,2],(win_y,win_x))),axis=3)
+        windows = np.concatenate((windows,3*255+roll.window(data[i:win_y+i,:,3],(win_y,win_x))),axis=3)
+        windows = np.concatenate((windows,4*255+roll.window(data[i:win_y+i,:,4],(win_y,win_x))),axis=3)
+        windows = np.concatenate((windows,5*255+roll.window(data[i:win_y+i,:,5],(win_y,win_x))),axis=3)
+        windows = np.concatenate((windows,6*255+roll.window(data[i:win_y+i,:,6],(win_y,win_x))),axis=3)
+        windows = np.concatenate((windows,7*255+roll.window(data[i:win_y+i,:,7],(win_y,win_x))),axis=3)
+        windows = np.concatenate((windows,8*255+roll.window(data[i:win_y+i,:,8],(win_y,win_x))),axis=3)
+        windows = np.concatenate((windows,9*255+roll.window(data[i:win_y+i,:,9],(win_y,win_x))),axis=3)
+        windows = np.squeeze(windows)
+        for j in range(windows.shape[0]):
+            features[i+int(win_y/2)+1,j+int(win_x/2)+2,:] = np.squeeze(cv2.calcHist([windows[i,:,:]],[0],None,[8*D],[0,256*D]))
     return features
 
-#%% Split into validation and training sets
-    #splits features and lables passed in as NxN matricies
-    #returns validation and training matricies as N*N x 1 array with random order
+#%% Classification
 
 def validation_split(features, lables, valPercent):
+    ''' Split into validation and training sets
+        splits features and lables passed in as NxN matricies
+        returns validation and training matricies as N*N x 1 array with random order
+    '''
     fN1,fN2,fC = np.shape(features)
     lN1,lN2 = np.shape(lables)
-    
     #Data and lables must have same shape
     assert fN1 == lN1
-    assert fN2 == lN2
-        
+    assert fN2 == lN2    
     #place features and lables into flat arrays
     features = np.reshape(features,(fN1*fN2,fC))
     lables = lables.flatten()
-    
     #shuffle samples preserving lables
     order = list(range(np.shape(features)[0]))
     np.random.shuffle(order)
     features = features[order,:]
     lables = lables[order]
-    
     #split data according to valPercent
     features_train = features[0:int(fN1*fN2*(1-valPercent))]
     features_val = features[int(fN1*fN2*(1-valPercent)) + 1:(fN1*fN2)]
     lables_train = lables[0:int(fN1*fN2*(1-valPercent))]
     lables_val = lables[int(fN1*fN2*(1-valPercent)) + 1:(fN1*fN2)]
-    
     return features_val,features_train, lables_val, lables_train
 
 
@@ -207,9 +119,33 @@ def validation_split(features, lables, valPercent):
 
 def main():
     
-    data_train,locs,labels,pond_masks = read_train_data()
-    pixel_class_labels = write_train_data_pixels(data_train,locs,labels,pond_masks)
-    features = extract_features(data_train,5,5,2)
+    '''
+    data,locs,labels,pond_masks = load_train_data()
+    hsv = cv2.cvtColor(data,cv2.COLOR_RGB2HSV)
+    gray = cv2.cvtColor(data,cv2.COLOR_RGB2GRAY)[:,:,None]
+    canny = get_canny(data)[:,:,None]
+    fourier = get_fourier(gray)
+    data = np.concatenate((data,hsv,gray,canny,fourier),axis=2)
+    hsv,gray,canny,fourier = 0,0,0,0
+    np.save('../data/data_preproc',data)
+    '''
+    
+    '''
+    data = np.load('../data/data_preproc.npy')
+    extract_features(data)
+    np.save('../data/data_features',features)
+    '''
+    
+    features = np.load('../data/data_features.npy')
+    
+    import numpy as np
+    from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+    X = np.array([[-1, -1], [-2, -1], [-3, -2], [1, 1], [2, 1], [3, 2]])
+    y = np.array([1, 1, 1, 2, 2, 2])
+    clf = LinearDiscriminantAnalysis()
+    clf.fit(X, y)
+    
+    print(clf.predict([[-0.8, -1]]))
     
     whitePix = np.where(pixel_class_labels == 1)
     redPix = np.where(pixel_class_labels == 2)
@@ -265,10 +201,5 @@ def main():
     # leave is some bakcground targets to avoid high FP Rate
     # use np.where
     
-    
-    
-
-
 if  __name__ == '__main__':
     main()
-

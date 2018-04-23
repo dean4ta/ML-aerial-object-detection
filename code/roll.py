@@ -1,3 +1,8 @@
+#%% EEL 4930 Final Project
+# Christian Marin
+# Troy Tharpe
+# Dean Fortier
+
 import numpy as np
 
 def rolling_window(array, window=(0,), asteps=None, wsteps=None, axes=None, toend=True):
