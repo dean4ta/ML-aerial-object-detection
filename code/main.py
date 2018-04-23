@@ -6,13 +6,13 @@
 import numpy as np # (given)
 import matplotlib.pyplot as plt # (given)
 import scipy.io as spio # (given)
-
-import cv2
-
-from roll import rolling_window
+import multiprocessing as mp
+import cv2, util, roll
+from numba import jit
 
 #%% load data
 
+@jit
 def load_train_data():
     ''' loads provided training data from 'data' folder in root directory
             data_train: (6250,6250,3) (ypixel,xpixel,r/g/b)
@@ -37,6 +37,7 @@ def load_train_data():
 
 #%% preprocessing
 
+@jit
 def get_canny(data,d=9,σColor=75,σSpace=75,minVal=100,maxVal=200):
     ''' performs edge detection using canny filter
             d: diameter of pixel neighborhoods used during filtering
@@ -47,91 +48,69 @@ def get_canny(data,d=9,σColor=75,σSpace=75,minVal=100,maxVal=200):
     '''
     return cv2.Canny(cv2.bilateralFilter(data,d,σColor,σSpace),minVal,maxVal,L2gradient=True)
 
+@jit
 def get_fourier(data,HPF_size=60):
     ''' Perofrms a DFT and high pass filtering
         data: grayscale 2D image array
         HPF_size: High Pass Filter size of box to filter out
     '''
-    r,c,d = np.shape(data)
-    rcenter,ccenter = int(r/2),int(c/2)
-    # data = cv2.fastNlMeansDenoising(data,None,10,7,21)
-    
-    
-    mask = np.ones((r,c,2),np.uint8)
-    mask[rcenter-HPF_size:rcenter+HPF_size,ccenter-HPF_size:ccenter+HPF_size] = 0
-    fshift = dft_shift*mask
-    f_ishift = np.fft.ifftshift(fshift)
-    img_back = cv2.idft(f_ishift)
-    img_back = cv2.magnitude(img_back[:,:,0],img_back[:,:,1])
-    
-    dft = cv2.dft(np.float32(data),flags=cv2.DFT_COMPLEX_OUTPUT)
-    dft = np.fft.fftshift(dft)
-    dft[rcenter-HPF_size:rcenter+HPF_size,ccenter-HPF_size:ccenter+HPF_size] = 0
-    return cv2.idft(np.fft.ifftshift(dft))
-    '''
-    data = (data/np.max(data)*255)**1.7
+    r,c = int(data.shape[0]/2),int(data.shape[1]/2)
+    data = cv2.fastNlMeansDenoising(data,None,10,7,21)
+    data = np.fft.fftshift(cv2.dft(np.float32(data),flags=cv2.DFT_COMPLEX_OUTPUT))
+    data[r-HPF_size:r+HPF_size,c-HPF_size:c+HPF_size] = 0
+    data = cv2.idft(np.fft.ifftshift(data))
+    data = (data/np.max(data)*255)**2
     data[np.where(data>255)] = 255
-    return data'''
+    return (data).astype(np.uint8)
 
 #%% feature extraction
 
-def extract_features(data,win_y,win_x):
-    ''' extract features from given image over sliding window
-            data - 3D image (2D image x color dimensions)
-            win_y - window height SHOULD BE ODD
-            win_x - window width  SHOULD BE ODD
-    '''
-    N1,N2,C = np.shape(data)
-    '''
-    features = np.zeros((N1-win_y+1,N2-win_x+1,C*nfeatures))
-    feature_iter = 0
-    for x in range(C):
-        print(' computing sliding windows for',x,'color dimension')
-        windows = rolling_window(data[:,:,x],(win_y,win_x))
-        # ***** modify below - add features as desired ***** #
-        # features[:,:,feature_iter+n] = f(windows,axis=(2,3)) #
-        print(' computing features for',x,'color dimension')
-        # features[:,:,feature_iter+0] = np.mean(windows,axis=(2,3)) -- update to be self pixel
-        features[:,:,feature_iter+0] = np.mean(windows,axis=(2,3))
-        features[:,:,feature_iter+1] = np.median(windows,axis=(2,3))
-        feature_iter += nfeatures
-    '''
-    color_hist = cv2.calcHist(windows,np.arange(C),None,[8],[0,255])
-    
+@jit
+def extract_features(data,win_y=15,win_x=15):
+    N1,N2,D = np.shape(data)
+    features = np.zeros((N1,N2,8*D)).astype(np.uint8)
+    for i in range(N1-win_y):
+        print('iter '+str(i))
+        windows = roll.window(data[i:win_y+i,:,0],(win_y,win_x)).astype(np.uint16)
+        windows = np.concatenate((windows,1*255+roll.window(data[i:win_y+i,:,1],(win_y,win_x))),axis=3)
+        windows = np.concatenate((windows,2*255+roll.window(data[i:win_y+i,:,2],(win_y,win_x))),axis=3)
+        windows = np.concatenate((windows,3*255+roll.window(data[i:win_y+i,:,3],(win_y,win_x))),axis=3)
+        windows = np.concatenate((windows,4*255+roll.window(data[i:win_y+i,:,4],(win_y,win_x))),axis=3)
+        windows = np.concatenate((windows,5*255+roll.window(data[i:win_y+i,:,5],(win_y,win_x))),axis=3)
+        windows = np.concatenate((windows,6*255+roll.window(data[i:win_y+i,:,6],(win_y,win_x))),axis=3)
+        windows = np.concatenate((windows,7*255+roll.window(data[i:win_y+i,:,7],(win_y,win_x))),axis=3)
+        windows = np.concatenate((windows,8*255+roll.window(data[i:win_y+i,:,8],(win_y,win_x))),axis=3)
+        windows = np.concatenate((windows,9*255+roll.window(data[i:win_y+i,:,9],(win_y,win_x))),axis=3)
+        windows = np.squeeze(windows)
+        for j in range(windows.shape[0]):
+            features[i+int(win_y/2)+1,j+int(win_x/2)+2,:] = np.squeeze(cv2.calcHist([windows[i,:,:]],[0],None,[8*D],[0,256*D]))
     return features
 
 #%%  main
 
 def main():
     
+    '''
     data,locs,labels,pond_masks = load_train_data()
-    
     hsv = cv2.cvtColor(data,cv2.COLOR_RGB2HSV)
     gray = cv2.cvtColor(data,cv2.COLOR_RGB2GRAY)[:,:,None]
     canny = get_canny(data)[:,:,None]
-    fourier = get_fourier(data)
+    fourier = get_fourier(gray)
     data = np.concatenate((data,hsv,gray,canny,fourier),axis=2)
     hsv,gray,canny,fourier = 0,0,0,0
-    np.save('../data/data_preproc.mat',data)
-    data = np.load('../data/data_preproc.mat')
+    np.save('../data/data_preproc',data)
+    '''
     
-    extract_features(data,)
-    # np.save('../data/data_features.mat',features)
-    # features = np.load('../data/data_features.mat')
+    '''
+    data = np.load('../data/data_preproc.npy')
+    extract_features(data)
+    np.save('../data/data_features',features)
+    '''
+    
+    features = np.load('../data/data_features.npy')
     
     
-    # dft = cv_dft('../data/data_train_original.png',a=1,b=2) # dft w/o denoising
-    # denoise_colored_image('data_train_denoised.png')
-    # denoised_dft = cv_dft('data_train_denoised.png',a=3,b=4) # #dft w denoising
-    # cv2.bilateralFilter('../data/data_train_denoised.png',9,75,75)
-    # denoised_dft = cv_dft('../data/data_train_denoised.png',a=3,b=4) #dft w bilateral
-    # data_dft = cv_dft(data_gray,a=1,b=2) # Get FT preprocess data
-    # denoised_data = np.arrya(denoise_colored_image(data_train)).astype(np.uint8)
-    # denoised_data_dft = np.array(cv_dft(denoised_data,a=3,b=4)).astype(np.uint8)[:,:,None]
-
-    ## feature extraction
-    # features = extract_features(data_train,6,6,2)
-    # features = extract_features(colorData,win_y,win_x,nfeatures) # Extract Features from Color Space
-
+    
+    
 if  __name__ == '__main__':
     main()
