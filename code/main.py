@@ -14,6 +14,7 @@ from numba import jit
 from roll import rolling_window
 from skimage import data
 from skimage.feature import greycomatrix, greycoprops
+from sklearn.svm import SVC
 
 RGB_FLAG = [255,0,255]
 
@@ -43,6 +44,23 @@ def read_train_data():
     return data_train,locs,labels,pond_masks
 
 @jit
+def read_custom_train_data():
+    ''' loads provided training data from 'data' folder in root directory
+            data_train: (6250,6250,3) (ypixel,xpixel,r/g/b)
+            locs: (112,2) (index,xpixel/ypixel)
+            labels: (112,1) (index,label)
+            pond_masks: (?,2) (index,xpixel/ypixel)
+    '''
+    # load data_train.mat: format - <y>,<x>,<r,g,b>
+    mat = spio.loadmat('../data/data_train.mat') # load mat object
+    data_train = mat.get('data_train') # extract image struct from mat object
+    # load labels.txt: format - <x> <y> <label>
+    pairs = np.loadtxt('../data/custom_labels.txt').astype(int) # load label matrix
+    locs = pairs[:,0:2] # <x> <y> pixel indices
+    labels = pairs[:,2] # <label> 1=whitecar,2=redcar,3=pool,4=pond
+    return data_train,locs,labels
+
+@jit
 def write_train_data(data_train,locs,labels,pond_masks):
     ''' write original, car/pool labeled, and pond masked images as pngs
             data_train_original.png: original matrix as png
@@ -59,10 +77,52 @@ def write_train_data(data_train,locs,labels,pond_masks):
         y = pond_masks[i][:,1]
         x = pond_masks[i][:,0]
         for j in range(np.size(pond_masks[i],axis=0)):
-    data_train_masks[y[j],x[j],:] = RGB_FLAG
+            data_train_masks[y[j],x[j],:] = RGB_FLAG
     cv2.imwrite('../data/data_train_original.png',data_train[:,:,::-1])
     cv2.imwrite('../data/data_train_labels.png',data_train_labels[:,:,::-1])
     cv2.imwrite('../data/data_train_masks.png',data_train_masks[:,:,::-1])
+
+    
+def write_pred_data(data_train,labels):
+    ''' write labeled image as png
+            data_pred_labeled.png: pixel-level target label mask (0xFF00FF)
+    '''
+    data_pred_labels = data_train.copy() # copy training image
+    N1, N2 = np.shape(labels)
+    for i in range(N1):
+        for j in range(N2):
+            if labels[i,j] == 1:
+               data_pred_labels[i,j,:] = [0,255,0]
+            elif labels[i,j] == 2:
+                data_pred_labels[i,j,:] = [0,255,255]
+            elif labels[i,j] == 3:
+                data_pred_labels[i,j,:] = [255,255,0]
+            elif labels[i,j] == 3:
+                data_pred_labels[i,j,:] = [255,0,0]
+              
+               
+    cv2.imwrite('../data/data_pred_labels.png',data_pred_labels[:,:,::-1])
+    
+
+def get_pixel_class_lables(data_train,locs,labels):
+    ''' Assign a lable to each individual pixel, return flattnened 
+        array of every pixel lable in image
+        Background class label = -1
+    '''
+    N1, N2, C = np.shape(data_train)
+    pixel_class_labels = np.array(np.ones((N1, N2)))
+    pixel_class_labels *= -1
+
+    
+    for i in range(len(np.unique(labels))): # unique pixel labels
+        y = np.array(locs[labels==(i+1),1],dtype=int)
+        x = np.array(locs[labels==(i+1),0],dtype=int)
+        for j in range(np.size(locs[labels==(i+1)],axis=0)):
+            pixel_class_labels[y[j], x[j]] = i + 1
+            
+    pixel_class_labels = pixel_class_labels
+    
+    return pixel_class_labels
 
 @jit
 def test_label_flags(path, flags):
@@ -81,7 +141,7 @@ def test_label_flags(path, flags):
         if t.size is not 0:
             raise ValueError('Flag ' + f + ' found in image')
 
-@jit
+
 def read_custom_labels(path,original=0):
     ''' read in custom data labels from a labeled/tagged image
 		outputs text file in format given
@@ -94,12 +154,12 @@ def read_custom_labels(path,original=0):
         # [255,0,255], # reserved for existing labels
         # [0,0,255], # unused, open to special tag
     ]
-    
+    '''
     if original is not 0:
         print('validating flags...')
         test_for_labeling(original,flags)
         print('flags validated')
-    
+    '''
     im = cv2.imread(path)[:,:,::-1]
     agg = np.asarray(['\n'], dtype='|S11')
     
@@ -315,11 +375,26 @@ def extract_features(data,win_y,win_x,nfeatures):
 
 def main():
     
-	# data_path='../data/data_train_matlab.png'
-    # labeled_path='../data/data_train_matlab_labeled.png'
-    # read_custom_data(labeled_path,data_path)
-    # data_train,locs,labels,pond_masks = read_train_data()
-    # data_train = convert_colorspace(data_train)
+	labeled_path='../data/data_train_custom_filled.png'
+	read_custom_labels(labeled_path)
+	data_train,locs,labels = read_custom_train_data()
+	data_train = convert_colorspace(data_train)
+    
+	pixel_class_lables = get_pixel_class_lables(data_train,locs,labels)
+	features = extract_features(data_train,6,6,2)
+    
+	features = np.pad(features,((3,2),(3 ,2),(int(0), int(0))),mode = 'edge')
+	features = np.reshape(features,(6250*6250,14))
+	pixel_class_lables = pixel_class_lables.ravel()
+  
+	clf = SVC()
+	clf.fit(features,pixel_class_lables)
+    
+	predicted_lables = clf.predict(features)
+	predicted_lables = predicted_lables.reshape(6250,6250)
+	write_pred_data(data_train,predicted_lables)
+    
+
 	# canny(data_train.copy(),9,75,75,100,200)
     # write_train_data(data_train,locs,labels,pond_masks)
     # plot_train_labels(data_train,labels,locs)
