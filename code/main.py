@@ -159,12 +159,33 @@ def main():
     X = lda.transform(data)
     '''
     
+    '''#ADDED BY CHRISTIAN
     ## post-processing ##
     data = load_custom_labels('../data/custom_labels.txt',(6250,6250,1))
     data = 255*(data-np.min(data))/np.max(data).astype(np.uint8)
     data[data>0] = 255
     data = cv2.GaussianBlur(data,(15,15),0).astype(uint8)
     cv2.imwrite('../data/test.png',data)
+    '''
+    
+    #ADDED BY DEAN
+    data = load_custom_labels('../data/custom_labels.txt',(6250,6250,1))
+    data = 255*(data-np.min(data))/np.max(data).astype(np.uint8)
+    data[data>0] = 255
+    cv2.imwrite('../data/test.png',data)
+    data = data[:,:,0]
+    im = cv2.imread("../data/test.jpg", cv2.IMREAD_GRAYSCALE)
+    # Set up the detector with default parameters.
+    detector = cv2.SimpleBlobDetector()
+    # Detect blobs.
+    keypoints = detector.detect(im)
+    # Draw detected blobs as red circles.
+    # cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS ensures the size of the circle corresponds to the size of blob
+    im_with_keypoints = cv2.drawKeypoints(im, keypoints, np.array([]), (0,0,255), cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
+    # Show keypoints
+    cv2.imshow("Keypoints", im_with_keypoints)
+    cv2.waitKey(0)
+    #/ADDED BY DEAN
     
     '''
     whitePix = np.where(pixel_class_labels == 1)
