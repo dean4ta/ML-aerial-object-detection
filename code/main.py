@@ -10,6 +10,7 @@ import cv2,roll,util
 from numba import jit
 from sklearn.metrics import f1_score
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+from sklearn import svm
 
 #%% load data
 
@@ -130,6 +131,33 @@ def validation_split(features,lables,valPercent):
     lables_val = lables[int(fN1*fN2*(1-valPercent)) + 1:(fN1*fN2)]
     return features_val,features_train,lables_val,lables_train
 
+def lda_init(features, labels):
+    
+    #determine total number of background labels
+    bgPix = np.where(labels == -1)
+    bgPixCount = np.size(bgPix)/3
+    
+    labels = np.ravel(labels)
+    
+    #randomely order label and feature data for downsampling background
+    labels,features = unison_shuffled_copies(labels,features)
+    
+    #Remove 99.3% of background data for training
+    count = 0;
+    mask = np.ones(len(labels),dtype = bool)
+    for i in range(len(labels)):
+        if labels[i] == -1 and count < (0.993 * bgPixCount):
+            mask[i] = False
+            count +=1
+    labels = labels[mask,...]
+    no_bgdata = features[mask,...]
+        
+    return no_bgdata, labels
+
+def unison_shuffled_copies(a, b):
+    assert len(a) == len(b)
+    p = np.random.permutation(len(a))
+    return a[p], b[p]
 
 #%%  main
 
@@ -152,62 +180,30 @@ def main():
     '''
     
     # classification
-    data = np.load('../data/data_features.npy')
+    '''
+    The next few lines will need to be altered if not reading in pre aggregated data
+    '''
+    data = np.load('../data/features.npy')
+    data = data[:,:,0:24]
     data = data.reshape(data.shape[0]*data.shape[1],data.shape[2])
+    
+    #Read in previously labeled data
     labels = load_custom_labels('../data/custom_labels.txt', (6250,6250,80))
+    
+    #initialize lda
     lda = LinearDiscriminantAnalysis()
-    lda.fit(data,np.ravel(labels))
-    X = lda.transform(data)
+    no_bgdata,labels = lda_init(data,labels)
+    #fit lda
+    lda.fit(no_bgdata,labels)
     
-    
-    '''
-    whitePix = np.where(pixel_class_labels == 1)
-    redPix = np.where(pixel_class_labels == 2)
-    poolPix = np.where(pixel_class_labels == 3)
-    pondPix = np.where(pixel_class_labels == 4)
-    bgPix = np.where(pixel_class_labels == -1)
-    bgPixCount = np.size(bgPix)/2
-    
-    #Split into training and validation
-    features_val,features_train,lables_val,lables_train = validation_split(features,pixel_class_labels,0)
-    
-    #Remove 99.9% of background data for training
-    count = 0;
-    mask = np.ones(len(lables_train),dtype = bool)
-    for i in range(len(lables_train)):
-        if lables_train[i] == -1 and count < (0.995 * bgPixCount):
-            mask[i] = False
-            count +=1
-    nobg_lables_train = lables_train[mask,...]
-    nobg_features_train = features_train[mask,...]
-    
-    #Remove all of background data for testing
-    count = 0;
-    mask = np.ones(len(lables_train),dtype = bool)
-    for i in range(len(lables_train)):
-        if lables_train[i] == -1:
-            mask[i] = False
-            count +=1
-    nobg_lables_test = lables_train[mask,...]
-    nobg_features_test = features_train[mask,...]
-    
-    #Predict lables or probability
-    predicted_lables = lda.predict(features_train)
-    
-    lda.fit(nobg_features_train,nobg_lables_train)
-    lda.fit(features_train,lables_train)
-    lda.predict([[-0.8,-1]])
-    
+    #predict labels
+    predicted_lables = lda.predict(data)
     predicted_lables = np.reshape(predicted_lables,(int(predicted_lables.size**(1/2)),int(predicted_lables.size**(1/2))))
-    write_pred_data(data_train,predicted_lables)
-    '''
+    
+    #Visualization
+    #data_train,a,b,c = load_train_data()    
+    #write_pred_data(data_train,predicted_lables)
 
-    #Score
-    '''
-    f1score = f1_score(nobg_lables_train,predicted_lables,average = 'micro')
-    #f1score = f1_score(nobg_lables_test,predicted_lables,average = 'micro')
-    print('f1 score = ' + f1score)
-    '''
 
 if  __name__ == '__main__':
     main()
