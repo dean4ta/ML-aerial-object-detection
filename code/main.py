@@ -48,7 +48,6 @@ def load_custom_labels(path,dims):
     locs,labels = labels[:,0:2],labels[:,2].astype(np.uint8)
     for i in range(labels.shape[0]):
         labels_mask[locs[i,1],locs[i,0]] = labels[i]
-    labels_mask = labels_mask.reshape(N1*N2,1)
     return labels_mask
 
 #%% preprocessing
@@ -130,7 +129,54 @@ def validation_split(features,lables,valPercent):
     lables_val = lables[int(fN1*fN2*(1-valPercent)) + 1:(fN1*fN2)]
     return features_val,features_train,lables_val,lables_train
 
+#%% Scoring
+    
+def score(predictedLabelPath, trueLabelPath, haloRadius):
+    ''' Reads in two text files containing labels and halo radius
+        Returns aggregated score percentage A
+        Where A = 0.3*f1white + 0.3*f1red + 0.3*f1pool + 0.1*f1pond
+        where f1 = 2*tp/(2tp + fp + fn)
+    '''
+    predictedPairs = np.loadtxt(predictedLabelPath).astype(np.uint16) # load label matrix
+    predictedLocs = pairs[:,0:2] # <x> <y> pixel indices
+    predictedLabels = pairs[:,2].astype(np.uint8) # <label> 1=whitecar,2=redcar,3=pool,4=pond
+    
+    truePairs = np.loadtxt(trueLabelPath).astype(np.uint16) # load label matrix
+    trueLocs = pairs[:,0:2] # <x> <y> pixel indices
+    trueLabels = pairs[:,2].astype(np.uint8) # <label> 1=whitecar,2=redcar,3=pool,4=pond
+    
+def circle(self, x0, y0, radius, colour=1):
+    f = 1 - radius
+    ddf_x = 1
+    ddf_y = -2 * radius
+    x = 0
+    y = radius
+    self.set(x0, y0 + radius, colour)
+    self.set(x0, y0 - radius, colour)
+    self.set(x0 + radius, y0, colour)
+    self.set(x0 - radius, y0, colour)
 
+    while x < y:
+      if f >= 0: 
+        y -= 1
+        ddf_y += 2
+        f += ddf_y
+        x += 1
+        ddf_x += 2
+        f += ddf_x    
+        self.set(x0 + x, y0 + y, colour)
+        self.set(x0 - x, y0 + y, colour)
+        self.set(x0 + x, y0 - y, colour)
+        self.set(x0 - x, y0 - y, colour)
+        self.set(x0 + y, y0 + x, colour)
+        self.set(x0 - y, y0 + x, colour)
+        self.set(x0 + y, y0 - x, colour)
+        self.set(x0 - y, y0 - x, colour)
+        Bitmap.circle = circle
+
+        bitmap = Bitmap(25,25)
+        bitmap.circle(x0=12, y0=12, radius=12)
+        bitmap.chardisplay()
 #%%  main
 
 def main():
@@ -153,6 +199,7 @@ def main():
     
     # classification
     data = np.load('../data/data_temp_features.npy')
+    load_custom_labels(path,dims):
     data = data.reshape(data.shape[0]*data.shape[1],data.shape[2])
     lda = LinearDiscriminantAnalysis()
     lda.fit(data,np.ravel(labels))
@@ -210,3 +257,24 @@ def main():
 
 if  __name__ == '__main__':
     main()
+#%%  Setup for Scoring Tests   
+    
+    data = np.load('../data/data_temp_features.npy')  
+    data = data.reshape(data.shape[0]*data.shape[1],data.shape[2])
+#%%  Score Testing space
+    
+    trueLabelPath = '../data/labels.txt'
+    #true_labels_mask = load_custom_labels(trueLabelPath,(6250,6250,1))
+    pairs = np.loadtxt(trueLabelPath).astype(np.uint16) # load label matrix
+    locs = pairs[:,0:2] # <x> <y> pixel indices
+    labels = pairs[:,2].astype(np.uint8) # <label> 1=whitecar,2=redcar,3=pool,4=pond
+    numPoints, dim = locs.shape
+    for(n in range numPoints):
+        for(i in range)
+    
+    #lda = LinearDiscriminantAnalysis()
+    #lda.fit(data,np.ravel(labels))
+    
+    
+    
+    
