@@ -48,6 +48,55 @@ def test_label_flags(path, flags):
         if t.size is not 0:
             raise ValueError('Flag ' + f + ' found in image')
 
+def write_pred_data(data_train,labels):
+    ''' write labeled image as png
+            data_pred_labeled.png: pixel-level target label mask (0xFF00FF)
+    '''
+    data_pred_labels = data_train.copy() # copy training image
+    N1, N2 = np.shape(labels)
+    for i in range(N1):
+        for j in range(N2):
+            if labels[i,j] != -1:
+               data_pred_labels[i,j,:] = [255,0,255] 
+              
+               
+    cv2.imwrite('../data/data_pred_labels.png',data_pred_labels[:,:,::-1])
+    
+
+def write_train_data_pixels(data_train,locs,labels,pond_masks):
+    ''' write original and labeled image as png
+            data_train_original.png: original matrix as png
+            data_train_labeled.png: pixel-level target label mask (0xFF00FF)
+    '''
+    N1, N2, C = np.shape(data_train)
+    data_train_labels = data_train.copy() # copy training image
+    '''
+        Background class label = -1
+    '''
+    pixel_class_labels = np.array(np.ones((N1, N2)))
+    pixel_class_labels *= -1
+
+    
+    for i in range(len(np.unique(labels))): # unique pixel labels
+        y = np.array(locs[labels==(i+1),1],dtype=int)
+        x = np.array(locs[labels==(i+1),0],dtype=int)
+        for j in range(np.size(locs[labels==(i+1)],axis=0)):
+            for x_halo in range(-4,4):
+                for y_halo in range(-4,4):
+                    data_train_labels[y[j] + y_halo, x[j] + x_halo,:] = [255,0,255]
+                    pixel_class_labels[y[j] + y_halo, x[j] + x_halo] = i +1
+                        
+    for i in range(8): # pond masks
+        y = pond_masks[i][:,1]
+        x = pond_masks[i][:,0]
+        for j in range(np.size(pond_masks[i],axis=0)):
+            data_train_labels[y[j],x[j],:] = [255,0,255]
+            pixel_class_labels[y[j],x[j]] = 4
+    cv2.imwrite('../data/data_train_original.png',data_train[:,:,::-1])
+    cv2.imwrite('../data/data_train_labels.png',data_train_labels[:,:,::-1])
+    
+    return pixel_class_labels
+
 def read_custom_labels(in_path,out_path,original=0):
     ''' read in custom data labels from a labeled/tagged image
         outputs text file in format given
