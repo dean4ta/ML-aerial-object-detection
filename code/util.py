@@ -56,10 +56,16 @@ def write_pred_data(data_train,labels):
     N1, N2 = np.shape(labels)
     for i in range(N1):
         for j in range(N2):
-            if labels[i,j] != -1:
-               data_pred_labels[i,j,:] = [255,0,255] 
-              
-               
+            print(j)
+            if labels[i,j] == 1:
+               data_pred_labels[i,j,:] = [0,255,0]
+            elif labels[i,j] == 2:
+               data_pred_labels[i,j,:] = [0,255,255]
+            elif labels[i,j] == 3:
+               data_pred_labels[i,j,:] = [255,255,0]
+            elif labels[i,j] == 4:
+               data_pred_labels[i,j,:] = [255,0,0]
+                           
     cv2.imwrite('../data/data_pred_labels.png',data_pred_labels[:,:,::-1])
     
 
