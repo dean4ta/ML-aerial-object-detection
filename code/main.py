@@ -48,7 +48,7 @@ def load_custom_labels(path,dims):
     locs,labels = labels[:,0:2],labels[:,2].astype(np.uint8)
     for i in range(labels.shape[0]):
         labels_mask[locs[i,1],locs[i,0]] = labels[i]
-    labels_mask = labels_mask.reshape(N1*N2,1)
+    #labels_mask = labels_mask.reshape(N1*N2,1)
     return labels_mask
 
 #%% preprocessing
@@ -152,8 +152,9 @@ def main():
     '''
     
     # classification
-    data = np.load('../data/data_temp_features.npy')
+    data = np.load('../data/data_features.npy')
     data = data.reshape(data.shape[0]*data.shape[1],data.shape[2])
+    labels = load_custom_labels('../data/custom_labels.txt', (6250,6250,80))
     lda = LinearDiscriminantAnalysis()
     lda.fit(data,np.ravel(labels))
     X = lda.transform(data)
