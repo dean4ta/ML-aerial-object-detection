@@ -48,7 +48,6 @@ def load_custom_labels(path,dims):
     locs,labels = labels[:,0:2],labels[:,2].astype(np.uint8)
     for i in range(labels.shape[0]):
         labels_mask[locs[i,1],locs[i,0]] = labels[i]
-    labels_mask = labels_mask.reshape(N1*N2,1)
     return labels_mask
 
 #%% preprocessing
@@ -103,7 +102,7 @@ def extract_features(data,win_y=15,win_x=15):
             features[i+int(win_y/2)+1,j+int(win_x/2)+2,8*D:(8+1)*D] = data[i+int(win_y/2)+1,j+int(win_x/2)+2,:]
     return features
 
-#%% Classification
+#%% classification
 
 def validation_split(features,lables,valPercent):
     ''' Split into validation and training sets
@@ -135,7 +134,7 @@ def validation_split(features,lables,valPercent):
 
 def main():
     
-    ## preprocessing ##
+    ## pre-processing ##
     '''
     data,locs,labels,pond_masks = load_train_data()
     hsv = cv2.cvtColor(data,cv2.COLOR_RGB2HSV)
@@ -151,13 +150,21 @@ def main():
     data = extract_features(data)
     '''
     
-    # classification
+    ## classification ##
+    '''
     data = np.load('../data/data_temp_features.npy')
     data = data.reshape(data.shape[0]*data.shape[1],data.shape[2])
     lda = LinearDiscriminantAnalysis()
     lda.fit(data,np.ravel(labels))
     X = lda.transform(data)
+    '''
     
+    ## post-processing ##
+    data = load_custom_labels('../data/custom_labels.txt',(6250,6250,1))
+    data = 255*(data-np.min(data))/np.max(data).astype(np.uint8)
+    data[data>0] = 255
+    data = cv2.GaussianBlur(data,(15,15),0).astype(uint8)
+    cv2.imwrite('../data/test.png',data)
     
     '''
     whitePix = np.where(pixel_class_labels == 1)
