@@ -22,25 +22,27 @@ def load_train_data():
             pond_masks: (?,2) (index,xpixel/ypixel)
         ex) data_train,locs,labels,pond_masks = read_train_data()
     '''
-    # load data_train.mat: format - <y>,<x>,<r,g,b>
+    # load data_train.mat: format-<y>,<x>,<r,g,b>
     mat = spio.loadmat('../data/data_train.mat') # load mat object
     data_train = mat.get('data_train') # extract image struct from mat object
-    # load labels.txt: format - <x> <y> <label>
+    # load labels.txt: format-<x> <y> <label>
     pairs = np.loadtxt('../data/custom_labels.txt').astype(np.uint16) # load label matrix
     locs = pairs[:,0:2] # <x> <y> pixel indices
     labels = pairs[:,2].astype(np.uint8) # <label> 1=whitecar,2=redcar,3=pool,4=pond
-    # load pond .txt masks: format - <x> <y>
+    # load pond .txt masks: format-<x> <y>
     pond_masks = []
     for i in range(8):
         file = '../data/pond'+str(i+1)+'.txt'
         pond_masks.append(np.loadtxt(file).astype(np.uint16))
+    util.plot_train_labels(data_train,labels,locs)
+    util.plot_train_masks(data_train.shape[0],pond_masks)
     return data_train,locs,labels,pond_masks
 
 @jit
 def load_custom_labels(path,dims):
     ''' load custom training labels (formatted txt from given path)
-            path - string to txt file
-            dims - shape of features
+            path-string to txt file
+            dims-shape of features
     '''
     N1,N2,D = dims
     labels_mask = -1*np.ones((N1,N2,1)).astype(np.uint8)
@@ -48,7 +50,6 @@ def load_custom_labels(path,dims):
     locs,labels = labels[:,0:2],labels[:,2].astype(np.uint8)
     for i in range(labels.shape[0]):
         labels_mask[locs[i,1],locs[i,0]] = labels[i]
-    labels_mask = labels_mask.reshape(N1*N2,1)
     return labels_mask
 
 #%% preprocessing
@@ -125,11 +126,55 @@ def validation_split(features,labels,valPercent):
     labels = labels[order]
     #split data according to valPercent
     features_train = features[0:int(fN1*fN2*(1-valPercent))]
-    features_val = features[int(fN1*fN2*(1-valPercent)) + 1:(fN1*fN2)]
+    features_val = features[int(fN1*fN2*(1-valPercent))+1:(fN1*fN2)]
     labels_train = labels[0:int(fN1*fN2*(1-valPercent))]
-    labels_val = labels[int(fN1*fN2*(1-valPercent)) + 1:(fN1*fN2)]
+    labels_val = labels[int(fN1*fN2*(1-valPercent))+1:(fN1*fN2)]
     return features_val,features_train,labels_val,labels_train
 
+#%% Scoring
+
+def get_f1_score(predictLabelPath,actualLabelPath,r):
+    predict = np.loadtxt(predictLabelPath).astype(np.int16)
+    actual = np.loadtxt(actualLabelPath).astype(np.int16)
+    max_u16,r2 = 2**16-1,r**2
+    xcord,ycord,label = 0,1,2
+    for alarm in range(predict.shape[0]):
+        nearest_dist,nearest_ind = max_u16,max_u16
+        for truth in range(actual.shape[0]):
+            if(np.all(actual[truth,[xcord,ycord]]!=[max_u16,max_u16])):
+                if(actual[truth,label]==predict[alarm,label]):
+                    d2 = (actual[truth,xcord]-predict[alarm,xcord])**2 + \
+                         (actual[truth,ycord]-predict[alarm,ycord])**2
+                    if(d2 < nearest_dist):
+                        nearest_dist = d2
+                        nearest_ind = truth
+        if(nearest_dist < r2):
+            predict[alarm,[xcord,ycord]] = [max_u16,max_u16]
+            actual[nearest_ind,[xcord,ycord]] = [max_u16,max_u16]
+    f1 = np.zeros(np.unique([actual]).shape[0]-1)
+    for i in range(1,np.unique([actual]).shape[0]-1):
+        tot_predict = np.sum(predict[:,label]==i)
+        tot_actual = np.sum(actual[:,label]==i)
+        true_pos = np.sum(np.logical_and(predict[:,xcord]==-1,predict[:,label]==i))
+        false_pos = tot_predict-true_pos
+        false_neg = tot_actual-true_pos
+        f1[i-1] = 2*true_pos/(2*true_pos+false_pos+false_neg)
+    
+    predict = np.loadtxt(predictLabelPath).astype(np.int16)
+    actual = np.loadtxt(actualLabelPath).astype(np.int16)
+    predict = predict[predict[:,label]==4]
+    actual = actual[actual[:,label]==4]
+    for alarm in range(predict.shape[0]):
+        for truth in range(actual.shape[0]):
+            if(np.all(actual[truth,:]==predict[alarm,:])):
+                predict[alarm,[xcord,ycord]] = [max_u16,max_u16]
+                actual[truth,[xcord,ycord]] = [max_u16,max_u16]
+    true_pos = np.sum(np.logical_and(predict[:,xcord]==-1,predict[:,label]==4))
+    false_pos = predict.shape[0]-true_pos
+    false_neg = actual.shape[0]-true_pos
+    f1[3] = true_pos/(true_pos+false_pos+false_neg)
+    return .3*(f1[0]+f1[1]+f1[2])+.1*f1[3]
+    
 
 #%%  main
 
@@ -144,47 +189,29 @@ def main():
     fourier = get_fourier(gray)
     data = np.concatenate((data,hsv,gray,canny,fourier),axis=2)
     hsv,gray,canny,fourier = 0,0,0,0
-    
+    '''
     
     ## feature extraction ##
-    
+    '''
     data = extract_features(data)
     '''
     
-# =============================================================================
-#     # classification
-#     data = np.load('../data/data_temp_features.npy')
-#     data = data.reshape(data.shape[0]*data.shape[1],data.shape[2])
-#     lda = LinearDiscriminantAnalysis()
-#     lda.fit(data,np.ravel(labels))
-#     X = lda.transform(data)
-#     
-# =============================================================================
-    
-    custom_labels = load_custom_labels("../data/custom_labels.txt",np.shape(data));
-    
-    bgPix = np.where(custom_labels == -1)
-    bgPixCount = np.size(bgPix)/2
+    ## classification ##
+    '''
+    data = np.load('../data/data_temp_features.npy')
+    load_custom_labels(path,dims):
     data = data.reshape(data.shape[0]*data.shape[1],data.shape[2])
-    #Split into training and validation
-    #shuffle samples preserving labels
-    order = list(range(np.shape(data)[0]))
-    np.random.shuffle(order)
-    data = data[order,:]
-    custom_labels = custom_labels[order]
-    #Remove 99.9% of background data for training
-    count = 0;
-    mask = np.ones(len(custom_labels),dtype = bool)
-    for i in range(len(custom_labels)):
-        if i%1000 == 0:
-            print(i)
-        if custom_labels[i] == -1 and count < (0.98 * bgPixCount):
-            mask[i] = False
-            count +=1
-    nobg_custom_labels = custom_labels[mask,...]
-    nobg_features = data[mask,...]
+    lda = LinearDiscriminantAnalysis()
+    lda.fit(data,np.ravel(labels))
+    X = lda.transform(data)
+    '''
     
-    
+    ## scoring ##
+    '''
+    path='../data/labels.txt'
+    score = get_f1_score(path,path,11)
+    print(score)
+    '''
     #Predict labels or probability
     lda = LinearDiscriminantAnalysis()
     #predicted_labels = lda.predict(features_train)
@@ -194,19 +221,11 @@ def main():
     lda.predict([[-0.8,-1]])
     
     predicted_labels = np.reshape(predicted_labels,(int(predicted_labels.size**(1/2)),int(predicted_labels.size**(1/2))))
-    
     predicted_labels = np.reshape(predicted_labels,(6250,6250))
-    
     data_train,a,b,c = load_train_data()
-    
     data_train[predicted_labels==1,:] = [255,0,255]
     cv2.imwrite('../data/data_pred_labels.png',data_train[:,:,::-1])
-    
     write_pred_data(data_train,predicted_labels)
-    
-    
-    #fuck it
-    #post processing shit
     
     img,locs,labels,pond_masks = load_train_data()
     row = 
@@ -234,13 +253,8 @@ def main():
                     classed[i,j] = pond;
                 else:
                     classed[i,j] = background;
-
-    #Score
-    '''
-    f1score = f1_score(nobg_labels_train,predicted_labels,average = 'micro')
-    #f1score = f1_score(nobg_labels_test,predicted_labels,average = 'micro')
-    print('f1 score = ' + f1score)
-    '''
-
+    
+    features_val,features_train,labels_val,labels_train = validation_split(features,pixel_class_labels,0)
+    
 if  __name__ == '__main__':
     main()

@@ -3,9 +3,8 @@
 # Troy Tharpe
 # Dean Fortier
 
-import numpy as np # (given)
-import matplotlib.pyplot as plt # (given)
-import scipy.io as spio # (given)
+import numpy as np
+import matplotlib.pyplot as plt
 
 import cv2, fileinput
 
