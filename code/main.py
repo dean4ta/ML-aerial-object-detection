@@ -242,9 +242,11 @@ def main():
     predicted_labels = lda.predict(data) # predict labels
     predicted_labels = np.reshape(predicted_labels,(int(predicted_labels.size**(1/2)),int(predicted_labels.size**(1/2))))
     
+    '''
     ## visualization ##
     data_train,a,b,c = load_train_data()    
     util.write_pred_data(data_train,predicted_labels)
+    '''
     
     ## postprocessing ##
     
@@ -253,27 +255,34 @@ def main():
     classed = predicted_labels
     for i in range(len(row)):
         for j in range(len(col)):
-            if (classed[i,j] == redcar):
+            #RC
+            if (classed[i,j] == 2):
                 if (img[i,j,0] >= 106 and img[i,j,0] <= 40 and img[i,j,1] >= 69 and img[i,j,1] >= 40 and img[i,j,2] >= 95 and img[i,j,2] <= 59):
-                    classed[i,j] = redcar;
+                    classed[i,j] = 2;
                 else:
-                    classed[i,j] = background;
-            elif (classed[i,j] == whitecar):
+                    classed[i,j] = -1;
+            #WC
+            elif (classed[i,j] == 1):
                 if (img[i,j,0] >= 227 and img[i,j,0] <= 255 and img[i,j,1] >= 237 and img[i,j,1] >= 255 and img[i,j,2] >= 230 and img[i,j,2] <= 255):
-                    classed[i,j] = whitecar;
+                    classed[i,j] = 1;
                 else:
-                    classed[i,j] = background;
-            elif (classed[i,j] == pool):
+                    classed[i,j] = -1;
+            #POOL
+            elif (classed[i,j] == 3):
                 if (img[i,j,0] >= 32 and img[i,j,0] <= 101 and img[i,j,1] >= 135 and img[i,j,1] >= 197 and img[i,j,2] >= 151 and img[i,j,2] <= 204):
-                    classed[i,j] = pool;
+                    classed[i,j] = 3;
                 else:
-                    classed[i,j] = background;
-            elif (classed[i,j] == pond):
+                    classed[i,j] = -1;
+            #POND
+            elif (classed[i,j] == 4):
                 if (img[i,j,0] >= 36 and img[i,j,0] <= 90 and img[i,j,1] >= 40 and img[i,j,1] >= 116 and img[i,j,2] >= 43 and img[i,j,2] <= 84):
-                    classed[i,j] = pond;
+                    classed[i,j] = 4;
                 else:
-                    classed[i,j] = background;
-    features_val,features_train,labels_val,labels_train = validation_split(features,pixel_class_labels,0)
+                    classed[i,j] = -1;
+    
+    ## visualization ##
+    data_train,a,b,c = load_train_data()
+    util.write_pred_data(data_train,classed)
     
     ## scoring ##
     '''
