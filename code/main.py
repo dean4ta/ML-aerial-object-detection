@@ -163,8 +163,29 @@ def main():
     data = load_custom_labels('../data/custom_labels.txt',(6250,6250,1))
     data = 255*(data-np.min(data))/np.max(data).astype(np.uint8)
     data[data>0] = 255
-    data = cv2.GaussianBlur(data,(15,15),0).astype(uint8)
+    data = cv2.GaussianBlur(data,(1,1),0).astype(np.uint8)
     cv2.imwrite('../data/test.png',data)
+    cnts = cv2.findContours(data.copy(), cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_SIMPLE)
+    cnts = cnts = cnts[1]
+    img = data.copy()
+    
+    
+    # loop over the contours
+    for c in cnts:
+    	# compute the center of the contour
+    	M = cv2.moments(c)
+    	cX = int(M["m10"] / M["m00"])
+    	cY = int(M["m01"] / M["m00"])
+     
+    	# draw the contour and center of the shape on the image
+    	cv2.drawContours(img, [c], -1, (0, 255, 0), 2)
+    	cv2.circle(img, (cX, cY), 7, (255, 0, 255), -1)
+    	cv2.putText(img, "center", (cX - 20, cY - 20),
+    	cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 255), 2)
+     
+    	# show the image
+    	cv2.imshow("Image", img)
+    	cv2.imwrite('../data/centers.png',img)
     
     '''
     whitePix = np.where(pixel_class_labels == 1)
@@ -217,3 +238,30 @@ def main():
 
 if  __name__ == '__main__':
     main()
+
+#%%
+    data = load_custom_labels('../data/custom_labels.txt',(6250,6250,1))
+    data = 255*(data-np.min(data))/np.max(data).astype(np.uint8)
+    data[data>0] = 255
+    data = cv2.GaussianBlur(data,(1,1),0).astype(np.uint8)
+    cv2.imwrite('../data/test.png',data)
+    cnts = cv2.findContours(data.copy(), cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_SIMPLE)
+    cnts = cnts[1]
+    img = cv2.imread('../data/data_train_original.png')
+    
+    
+    # loop over the contours
+    for c in cnts:
+    	# compute the center of the contour
+    	M = cv2.moments(c)
+    	cX = int(M["m10"] / M["m00"])
+    	cY = int(M["m01"] / M["m00"])
+     
+    	# draw the contour and center of the shape on the image
+    	cv2.drawContours(img, [c], -1, (0, 255, 0), 2)
+    	cv2.circle(img, (cX, cY), 7, (255, 0, 255), -1)
+    	cv2.putText(img, "center", (cX - 20, cY - 20),
+    	cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 255), 2)
+     
+    	# show the image
+    cv2.imwrite('../data/centers.png',img)
