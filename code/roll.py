@@ -5,7 +5,7 @@
 
 import numpy as np
 
-def rolling_window(array, window=(0,), asteps=None, wsteps=None):
+def window(array, window=(0,), asteps=None, wsteps=None):
     array = np.asarray(array)
     orig_shape = np.asarray(array.shape)
     window = np.atleast_1d(window).astype(int)
