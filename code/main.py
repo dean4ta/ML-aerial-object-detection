@@ -10,6 +10,7 @@ import cv2,roll,util
 from numba import jit
 from sklearn.metrics import f1_score
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+from sklearn import svm
 
 #%% load data
 
@@ -131,6 +132,34 @@ def validation_split(features,labels,valPercent):
     labels_val = labels[int(fN1*fN2*(1-valPercent))+1:(fN1*fN2)]
     return features_val,features_train,labels_val,labels_train
 
+def lda_init(features, labels):
+    
+    #determine total number of background labels
+    bgPix = np.where(labels == -1)
+    bgPixCount = np.size(bgPix)/3
+    
+    labels = np.ravel(labels)
+    
+    #randomely order label and feature data for downsampling background
+    labels,features = unison_shuffled_copies(labels,features)
+    
+    #Remove 99.3% of background data for training
+    count = 0;
+    mask = np.ones(len(labels),dtype = bool)
+    for i in range(len(labels)):
+        if labels[i] == -1 and count < (0.993 * bgPixCount):
+            mask[i] = False
+            count +=1
+    labels = labels[mask,...]
+    no_bgdata = features[mask,...]
+        
+    return no_bgdata, labels
+
+def unison_shuffled_copies(a, b):
+    assert len(a) == len(b)
+    p = np.random.permutation(len(a))
+    return a[p], b[p]
+
 #%% Scoring
 
 def get_f1_score(predictLabelPath,actualLabelPath,r):
@@ -174,7 +203,6 @@ def get_f1_score(predictLabelPath,actualLabelPath,r):
     false_neg = actual.shape[0]-true_pos
     f1[3] = true_pos/(true_pos+false_pos+false_neg)
     return .3*(f1[0]+f1[1]+f1[2])+.1*f1[3]
-    
 
 #%%  main
 
@@ -198,39 +226,31 @@ def main():
     
     ## classification ##
     '''
-    data = np.load('../data/data_temp_features.npy')
-    load_custom_labels(path,dims):
+    The next few lines will need to be altered if not reading in pre aggregated data
+    '''
+    data = np.load('../data/features.npy')
+    data = data[:,:,0:24]
     data = data.reshape(data.shape[0]*data.shape[1],data.shape[2])
-    lda = LinearDiscriminantAnalysis()
-    lda.fit(data,np.ravel(labels))
-    X = lda.transform(data)
-    '''
     
-    ## scoring ##
-    '''
-    path='../data/labels.txt'
-    score = get_f1_score(path,path,11)
-    print(score)
-    '''
-    #Predict labels or probability
-    lda = LinearDiscriminantAnalysis()
-    #predicted_labels = lda.predict(features_train)
+    # Read in previously labeled data
+    labels = load_custom_labels('../data/custom_labels.txt', (6250,6250,80))
     
-    lda.fit(nobg_features,nobg_custom_labels)
-    #lda.fit(features_train,labels_train)
-    lda.predict([[-0.8,-1]])
+    lda = LinearDiscriminantAnalysis() #initialize lda
+    no_bgdata,labels = lda_init(data,labels)
+    lda.fit(no_bgdata,labels) #fit lda
     
+    predicted_labels = lda.predict(data) # predict labels
     predicted_labels = np.reshape(predicted_labels,(int(predicted_labels.size**(1/2)),int(predicted_labels.size**(1/2))))
-    predicted_labels = np.reshape(predicted_labels,(6250,6250))
-    data_train,a,b,c = load_train_data()
-    data_train[predicted_labels==1,:] = [255,0,255]
-    cv2.imwrite('../data/data_pred_labels.png',data_train[:,:,::-1])
-    write_pred_data(data_train,predicted_labels)
+    
+    ## visualization ##
+    data_train,a,b,c = load_train_data()    
+    util.write_pred_data(data_train,predicted_labels)
+    
+    ## postprocessing ##
     
     img,locs,labels,pond_masks = load_train_data()
-    row = 
-    col = 
-    classed = 
+    row,col = img.shape[0],img.shape[1]
+    classed = predicted_labels
     for i in range(len(row)):
         for j in range(len(col)):
             if (classed[i,j] == redcar):
@@ -253,8 +273,14 @@ def main():
                     classed[i,j] = pond;
                 else:
                     classed[i,j] = background;
-    
     features_val,features_train,labels_val,labels_train = validation_split(features,pixel_class_labels,0)
+    
+    ## scoring ##
+    '''
+    path='../data/labels.txt'
+    score = get_f1_score(path,path,11)
+    print(score)
+    '''
     
 if  __name__ == '__main__':
     main()
