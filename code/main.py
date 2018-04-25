@@ -262,6 +262,7 @@ if  __name__ == '__main__':
 
 #%%
     data = load_custom_labels('../data/custom_labels.txt',(6250,6250,1))
+    data_orig,a,b,c = load_train_data()
     data = 255*(data-np.min(data))/np.max(data).astype(np.uint8)
     data[data>0] = 255
     data = cv2.GaussianBlur(data,(1,1),0).astype(np.uint8)
@@ -270,14 +271,15 @@ if  __name__ == '__main__':
     cnts = cnts[1]
     img = cv2.imread('../data/data_train_original.png')
     
-    
+    pairs = np.array(3)
     # loop over the contours
     for c in cnts:
     	# compute the center of the contour
     	M = cv2.moments(c)
     	cX = int(M["m10"] / M["m00"])
     	cY = int(M["m01"] / M["m00"])
-     
+    	temp = np.array([cX,cY,data_orig[cY,cX,0]]) 
+    	pairs = np.append(pairs,[temp])
     	# draw the contour and center of the shape on the image
     	cv2.drawContours(img, [c], -1, (0, 255, 0), 2)
     	cv2.circle(img, (cX, cY), 7, (255, 0, 255), -1)
