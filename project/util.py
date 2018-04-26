@@ -26,9 +26,9 @@ def writeTrainData(dataTrain, locs, labels, pondMasks):
         x = pondMasks[i][:, 0]
         for j in range(np.size(pondMasks[i], axis=0)):
             dataTrainMasks[y[j], x[j], :] = [255, 0, 255]
-    cv2.imwrite('../data/data_train_original.png', dataTrain[:, :, ::-1])
-    cv2.imwrite('../data/data_train_labels.png', dataTrainLabels[:, :, ::-1])
-    cv2.imwrite('../data/data_train_masks.png', dataTrainMasks[:, :, ::-1])
+    cv2.imwrite('./data/data_train_original.png', dataTrain[:, :, ::-1])
+    cv2.imwrite('./data/data_train_labels.png', dataTrainLabels[:, :, ::-1])
+    cv2.imwrite('./data/data_train_masks.png', dataTrainMasks[:, :, ::-1])
 
 def testLabelFlags(path, flags):
     ''' verifies given custom label flags do not appear in an image
@@ -63,7 +63,7 @@ def writePredData(dataTrain, labels):
                dataPredLabels[i, j, :] = [255, 255, 0]
             elif labels[i, j] == 4:
                dataPredLabels[i, j, :] = [255, 0, 0]                      
-    cv2.imwrite('../data/data_pred_labels.png', dataPredLabels[:, :, ::-1])
+    cv2.imwrite('./data/data_pred_labels.png', dataPredLabels[:, :, ::-1])
     
 
 def writeTrainDataPixels(dataTrain, locs, labels, pondMasks):
@@ -91,8 +91,8 @@ def writeTrainDataPixels(dataTrain, locs, labels, pondMasks):
         for j in range(np.size(pondMasks[i], axis=0)):
             dataTrainLabels[y[j], x[j], :] = [255, 0, 255]
             pixelClassLabels[y[j], x[j]] = 4
-    cv2.imwrite('../data/data_train_original.png', dataTrain[:, :, ::-1])
-    cv2.imwrite('../data/data_train_labels.png', dataTrainLabels[:, :, ::-1])
+    cv2.imwrite('./data/data_train_original.png', dataTrain[:, :, ::-1])
+    cv2.imwrite('./data/data_train_labels.png', dataTrainLabels[:, :, ::-1])
     return pixelClassLabels
 
 def readCustomLabels(inPath, outPath, original=0):
@@ -203,9 +203,9 @@ def window(array, window=(0,), aStep=None, wStep=None):
     wStep = np.ones_like(window)
     
     if window.ndim > 1 or np.any(window < 0) or len(array.shape) < len(window):
-        raise ValueError("data/window dimensions conflict")
+        raise ValueError('data/window dimensions conflict')
     if np.any(origShape[-len(window):] < window * wStep):
-        raise ValueError("data/window dimensions conflict")
+        raise ValueError('data/window dimensions conflict')
 
     newShape = origShape
     win = window.copy()
