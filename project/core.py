@@ -127,7 +127,7 @@ def extractFeatures(data, winY=15, winX=15, histBins=8):
     features = np.zeros((N1, N2, (histBins+1)*D)).astype(np.uint8)
     nValidRows = N1-winY+1
     for i in range(nValidRows):
-        # print('iter '+str(i+1)+'/'+str(nValidRows))
+        print('iter '+str(i+1)+'/'+str(nValidRows))
         windows = (util.window(data[i:i+winY, :, 0], (winY, winX)).astype(np.uint16))[0,:,:,:]
         for j in range(1, D):
             windows = np.concatenate((windows, j*typeMaxVal+util.window(data[i:i+winY, :, j], (winY, winX))[0,:,:,:]), axis=2)

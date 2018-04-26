@@ -26,20 +26,25 @@ def main():
         pondPaths.append('../data_train/pond'+str(i+1)+'.txt')
     data = core.loadTrainData(dataPath, dataObjName, labelPath, pondPaths)[0]
     labels = core.loadCustomLabels(customLabelsPath, np.shape(data))
-    del dataPath, dataObjName, labelPath, pondPaths, customLabelsPath, i    
+    del dataPath, dataObjName, labelPath, pondPaths, customLabelsPath, i
+    
     #↓ downsampled for system demonstration ↓#
-    N1, N2 = 1000, 1000
-    data = data[:N1,:N2,:]
+    #N1, N2 = 1000, 1000
+    #data = data[:N1,:N2,:]
     #↑ comment for conceptually relevant simulation ↑#
+    
     
     print('Extracting features...')
     data = core.extractFeatures(data)
     N1, N2, D = np.shape(data)
+    
     #↓ downsampled for system demonstration ↓#
-    D, dsD = 64, 64
-    data = data[:,:,:dsD].reshape(N1*N2,dsD)
-    labels = labels[:N1,:N2,:]
+    #D, dsD = 64, 64
+    #data = data[:,:,:dsD]
+    #labels = labels[:N1,:N2,:]
     #↑ comment for conceptually relevant simulation ↑#
+    
+    data = data.reshape(N1*N2,-1)
     
     print('Training classifier...')
     data, labels = core.ldaInit(data, labels)
@@ -59,17 +64,21 @@ def main():
     dataObjName = 'data_test'
     data = core.loadTestData(dataPath, dataObjName)
     del dataPath, dataObjName
+    '''
     #↓ downsampled for system demonstration ↓#
     N1, N2 = 600, 600
     data = data[:N1,:N2,:]
     #↑ comment for conceptually relevant simulation ↑#
+    '''
     
     print('Extracting features...')
     data = core.extractFeatures(data)
     N1, N2, D = np.shape(data)
+    '''
     #↓ downsampled for system demonstration ↓#
     data = data[:,:,:dsD].reshape(N1*N2,dsD)
     #↑ comment for conceptually relevant simulation ↑#
+    '''
     
     print('Testing classifier...')
     labels = lda.predict(data).astype(np.int16).reshape(N1,N2,1)
