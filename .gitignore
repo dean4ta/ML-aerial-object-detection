@@ -2,8 +2,7 @@
 
 *.mat
 *.npy
-data_train/*.txt
-data_test/*.txt
+data_test/results.txt
 
 
 # Auto-generated ignores:
@@ -72,7 +71,7 @@ data_test/*.txt
 *.svgz
 
 # Portable Document Format
-*.pdf
+# *.pdf
 
 # X BitMap
 *.xbm
