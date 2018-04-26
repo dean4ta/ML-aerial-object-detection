@@ -16,13 +16,13 @@ def main():
     #-------------------------------------------------------------------------#
     
     print('Loading training data...')
-    dataPath = './data_train/data_train.mat'
+    dataPath = '../data_train/data_train.mat'
     dataObjName = 'data_train'
-    labelPath = './data_train/labels.txt'
-    customLabelsPath = './data_train/custom_labels.txt'
+    labelPath = '../data_train/labels.txt'
+    customLabelsPath = '../data_train/custom_labels.txt'
     pondPaths = []
     for i in range(8):
-        pondPaths.append('./data_train/pond'+str(i+1)+'.txt')
+        pondPaths.append('../data_train/pond'+str(i+1)+'.txt')
     data = core.loadTrainData(dataPath, dataObjName, labelPath, pondPaths)[0]
     labels = core.loadCustomLabels(customLabelsPath, np.shape(data))
     del dataPath, dataObjName, labelPath, pondPaths, customLabelsPath, i    
@@ -35,7 +35,7 @@ def main():
     data = core.extractFeatures(data)
     N1, N2, D = np.shape(data)
     #↓ downsampled for system demonstration ↓#
-    D, dsD = 16, 16
+    D, dsD = 64, 64
     data = data[:,:,:dsD].reshape(N1*N2,dsD)
     labels = labels[:N1,:N2,:]
     #↑ comment for conceptually relevant simulation ↑#
@@ -54,12 +54,12 @@ def main():
     #-------------------------------------------------------------------------#
     
     print('Loading testing data...')
-    dataPath = './data_test/data_test.mat'
+    dataPath = '../data_test/data_test.mat'
     dataObjName = 'data_test'
     data = core.loadTestData(dataPath, dataObjName)
     del dataPath, dataObjName
     #↓ downsampled for system demonstration ↓#
-    N1, N2 = 500, 500
+    N1, N2 = 600, 600
     data = data[:N1,:N2,:]
     #↑ comment for conceptually relevant simulation ↑#
     
@@ -78,13 +78,13 @@ def main():
     print('Performing post-processing...')
     
     ''' TODO findContours?
-    data = loadCustomLabels('./data/custom_labels.txt', (6250, 6250, 1))
+    data = loadCustomLabels('../data/custom_labels.txt', (6250, 6250, 1))
     # data_orig, a, b, c = core.loadTrainData()
     data = 255*(data-np.min(data))/np.max(data).astype(np.uint8)
     data[data>0] = 255
     data = cv2.GaussianBlur(data, (1, 1), 0).astype(np.uint8)
-    cv2.imwrite('./data/test.png', data)
-    # img = cv2.imread('./data/data_train_original.png')
+    cv2.imwrite('../data/test.png', data)
+    # img = cv2.imread('../data/data_train_original.png')
     cnts = cv2.findContours(data.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     cnts = cnts = cnts[1]
     img = data.copy()
@@ -106,16 +106,16 @@ def main():
         
     	# show the image
     	cv2.imshow('Image', img)
-    	cv2.imwrite('./data/centers.png', img)
+    	cv2.imwrite('../data/centers.png', img)
     '''
     
     ''' TODO simpleDetector?
-    data = core.loadCustomLabels('./data/custom_labels.txt', (6250, 6250, 1))
+    data = core.loadCustomLabels('../data/custom_labels.txt', (6250, 6250, 1))
     data = 255*(data-np.min(data))/np.max(data).astype(np.uint8)
     data[data>0] = 255
-    cv2.imwrite('./data/test.png', data)
+    cv2.imwrite('../data/test.png', data)
     data = data[:, :, 0]
-    im = cv2.imread('./data/test.jpg', cv2.IMREAD_GRAYSCALE)
+    im = cv2.imread('../data/test.jpg', cv2.IMREAD_GRAYSCALE)
     # Set up the detector with default parameters.
     detector = cv2.SimpleBlobDetector()
     # Detect blobs.
@@ -136,8 +136,8 @@ def main():
     
     #-------------------------------------------------------------------------#
     
-    resultsPath = './data_test/results.txt'
-    truthPath = './data_test/labels_test.txt'
+    resultsPath = '../data_test/results.txt'
+    truthPath = '../data_test/labels_test.txt'
     print('Saving alarms...')
     core.saveResults(labels, resultsPath)
     print('Calculating score...')

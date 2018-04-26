@@ -38,7 +38,7 @@ def loadTrainData(dataPath, dataObjName, labelPath, pondPaths):
 
 @jit
 def quickReadMat():
-    dataPath = './data_train/data_train.mat'
+    dataPath = '../data_train/data_train.mat'
     dataObjName = 'data_train'
     mat = spio.loadmat(dataPath)
     return mat.get(dataObjName)
@@ -79,7 +79,7 @@ def saveResults(labels, path):
                     np.array([j, i, labels[i, j]]).astype(np.int16)])
     out = np.delete(out, (0), axis=0)
     np.random.shuffle(out)
-    np.savetxt(path, out[np.where(out[:,2]!=-1)].astype(np.int16))
+    np.savetxt(path, out[np.where(out[:,2]!=-1)].astype(np.int16),fmt='%s',newline='\n')
 
 #%% preprocessing
 
@@ -243,16 +243,16 @@ def getF1Score(predictLabelPath, actualLabelPath, radius=11):
         if(nearestDist < r2):
             predict[alarm, [xcord, ycord]] = [maxU16, maxU16]
             actual[nearestInd, [xcord, ycord]] = [maxU16, maxU16]
-    f1 = np.zeros(np.unique([actual]).shape[0]-1)
+    f1 = np.zeros(np.unique([actual]).shape[0]-1).astype(np.uint64)
     for i in range(1, np.unique([actual]).shape[0]-1):
-        nPredict = np.sum(predict[:, label]==i).astype(np.int64)
-        nActual = np.sum(actual[:, label]==i).astype(np.int64)
+        nPredict = np.sum(predict[:, label]==i).astype(np.int16)
+        nActual = np.sum(actual[:, label]==i).astype(np.int16)
         truePos = np.sum( \
             np.logical_and(predict[:, xcord]==-1, predict[:, label]==i) \
-        ).astype(np.int64)
-        falsePos = (nPredict-truePos).astype(np.int64)
-        falseNeg = (nActual-truePos).astype(np.int64)
-        f1[i-1] = 2*truePos/(2*truePos+falsePos+falseNeg)
+        ).astype(np.int16)
+        falsePos = (nPredict-truePos).astype(np.int16)
+        falseNeg = (nActual-truePos).astype(np.int16)
+        f1[i-1] = 2*truePos/(2*truePos+falsePos+falseNeg+.00000000001)
     predict = np.loadtxt(predictLabelPath).astype(np.int16)
     actual = np.loadtxt(actualLabelPath).astype(np.int16)
     predict = predict[predict[:, label]==4]
@@ -265,5 +265,5 @@ def getF1Score(predictLabelPath, actualLabelPath, radius=11):
     truePos = np.sum(np.logical_and(predict[:, xcord]==-1, predict[:, label]==4))
     falsePos = predict.shape[0]-truePos
     falseNeg = actual.shape[0]-truePos
-    f1[3] = truePos/(truePos+falsePos+falseNeg)
+    f1[3] = truePos/(truePos+falsePos+falseNeg+.00000000001)
     return .3*(f1[0]+f1[1]+f1[2])+.1*f1[3]
