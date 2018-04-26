@@ -7,6 +7,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import cv2, fileinput
 
+#%% utilities
+
 def writeTrainData(dataTrain, locs, labels, pondMasks):
     ''' write original, car/pool labeled, and pond masked images as pngs
             dataTrainOriginal.png: original matrix as png

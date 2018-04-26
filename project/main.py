@@ -15,7 +15,7 @@ def main():
     
     #-------------------------------------------------------------------------#
     
-    ## load training data ##
+    print('Loading training data...')
     dataPath = '../data_train/data_train.mat'
     dataObjName = 'data_train'
     labelPath = '../data_train/labels.txt'
@@ -26,21 +26,21 @@ def main():
     data = core.loadTrainData(dataPath, dataObjName, labelPath, pondPaths)[0]
     labels = core.loadCustomLabels(customLabelsPath, np.shape(data))
     del dataPath, dataObjName, labelPath, pondPaths, customLabelsPath, i    
-    #↓ downsampled for computational convenience ↓#
+    #↓ downsampled for system demonstration ↓#
     N1, N2 = 500, 500
     data = data[:N1,:N2,:]
-    #↑ comment out for full-scale simulation ↑#
+    #↑ comment for conceptually relevant simulation ↑#
     
-    ## extract features ##
+    print('Extracting features...')
     data = core.extractFeatures(data)
     N1, N2, D = np.shape(data)
-    #↓ downsampled for computational convenience ↓#
-    D, dsD = 10, 10
+    #↓ downsampled for system demonstration ↓#
+    D, dsD = 16, 16
     data = data[:,:,:dsD].reshape(N1*N2,dsD)
     labels = labels[:N1,:N2,:]
-    #↑ comment out for full-scale simulation ↑#
+    #↑ comment for conceptually relevant simulation ↑#
     
-    ## train classifier ##
+    print('Training classifier...')
     ''' TODO remove background
     data, labels = lda_init(data, labels)
     labels = lda.predict(data).reshape(labels, N1, N2)
@@ -53,29 +53,29 @@ def main():
     
     #-------------------------------------------------------------------------#
     
-    ## load testing data ##
+    print('Loading testing data...')
     dataPath = '../data_test/data_test.mat'
     dataObjName = 'data_test'
     data = core.loadTestData(dataPath, dataObjName)
     del dataPath, dataObjName
-    #↓ downsampled for computational convenience ↓#
+    #↓ downsampled for system demonstration ↓#
     N1, N2 = 500, 500
     data = data[:N1,:N2,:]
-    #↑ comment out for full-scale simulation ↑#
+    #↑ comment for conceptually relevant simulation ↑#
     
-    ## extract features ##
+    print('Extracting features...')
     data = core.extractFeatures(data)
     N1, N2, D = np.shape(data)
-    #↓ downsampled for computational convenience ↓#
+    #↓ downsampled for system demonstration ↓#
     data = data[:,:,:dsD].reshape(N1*N2,dsD)
-    #↑ comment out for full-scale simulation ↑#
+    #↑ comment for conceptually relevant simulation ↑#
     
-    ## test classifier ##
+    print('Testing classifier...')
     labels = lda.predict(data).reshape(N1,N2,1)
     
     #-------------------------------------------------------------------------#
     
-    ## post-processing - localize ##
+    print('Performing post-processing...')
     
     ''' TODO findContours?
     data = loadCustomLabels('../data/custom_labels.txt', (6250, 6250, 1))
@@ -128,8 +128,8 @@ def main():
     cv2.waitKey(0)
     '''
     
-    ## post-processing - filter ##
-    
+    print('Performing post-processing...')
+
     ''' TODO avoid certain flags in certain color ranges, avoid flags too near
     img, locs, labels, pondMasks = core.loadTrainData()
     row, col = img.shape[0], img.shape[1]
@@ -165,16 +165,17 @@ def main():
     #-------------------------------------------------------------------------#
     
     resultsPath = '../data_test/results.txt'
-    truthPath = '../data_test/labels_test.txt'
-    
-    ## save alarms ##
-    core.saveResults(labels, resultsPath)
-    
-    ## scoring ##
+    truthPath = '../data_test/labels_test.txt'    
+    print('Saving alarms...')
+    core.saveResults(labels, resultsPath)    
+    print('Calculating score...')
     score = core.getF1Score(resultsPath, truthPath, radius=15)
     print('Total Score = ' + score)
 
-    
+    #-------------------------------------------------------------------------#
+
+#%% Main
+
 if  __name__ == '__main__':
     main()
     

@@ -3,12 +3,12 @@
 # Troy Tharpe
 # Dean Fortier
 
-#%% load data
-
 import numpy as np
 import scipy.io as spio
 import util, cv2
 from numba import jit
+
+#%% load/save data
 
 @jit
 def loadTrainData(dataPath, dataObjName, labelPath, pondPaths):
@@ -62,15 +62,16 @@ def loadCustomLabels(path, dims):
             labelsMask[locs[i, 1], locs[i, 0]] = labels[i]
     return labelsMask
 
+@jit
 def saveResults(labels, path):
     N1, N2, D = labels.shape
-    out = np.array([0,0,0]).reshape((1,3))
+    out = np.array([0,0,0]).astype(np.uint16).reshape((1,3))
     for i in range(N1):
         for j in range(N2):
             if (labels[i,j] != -1):
-                out = np.append(out,np.array([j,i,labels[i,j]]),axis=0)
-    out.delete(0)
-    np.savetxt(out, path)
+                out = np.vstack([out, np.array([j, i, labels[i, j]])])
+    out = np.delete(out, (0), axis=0)
+    np.savetxt(path, out)
 
 #%% preprocessing
 
@@ -211,6 +212,7 @@ def getF1Score(predictLabelPath, actualLabelPath, radius=11):
         falsePos = nPredict-truePos
         falseNeg = nActual-truePos
         f1[i-1] = 2*truePos/(2*truePos+falsePos+falseNeg)
+    print('c')
     predict = np.loadtxt(predictLabelPath).astype(np.int16)
     actual = np.loadtxt(actualLabelPath).astype(np.int16)
     predict = predict[predict[:, label]==4]
