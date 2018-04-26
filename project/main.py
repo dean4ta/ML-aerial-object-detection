@@ -5,6 +5,7 @@
 
 import numpy as np
 import core
+import util
 
 from sklearn.discriminant_analysis \
     import LinearDiscriminantAnalysis
@@ -27,7 +28,7 @@ def main():
     labels = core.loadCustomLabels(customLabelsPath, np.shape(data))
     del dataPath, dataObjName, labelPath, pondPaths, customLabelsPath, i    
     #↓ downsampled for system demonstration ↓#
-    N1, N2 = 500, 500
+    N1, N2 = 1000, 1000
     data = data[:N1,:N2,:]
     #↑ comment for conceptually relevant simulation ↑#
     
@@ -41,13 +42,13 @@ def main():
     #↑ comment for conceptually relevant simulation ↑#
     
     print('Training classifier...')
-    ''' TODO remove background
-    data, labels = lda_init(data, labels)
+    data, labels = core.ldaInit(data, labels)
+    '''
+    For later visualization
     labels = lda.predict(data).reshape(labels, N1, N2)
     dataTrain, a, b, c = core.loadTrainData()    
-    util.write_pred_data(dataTrain, predictedLabels)
+    util.writePredData(dataTrain, labels)
     '''
-    labels = np.ravel(labels.reshape(N1*N2,1))
     lda = LinearDiscriminantAnalysis().fit(data, labels)
     del N1, N2, D, labels
     
