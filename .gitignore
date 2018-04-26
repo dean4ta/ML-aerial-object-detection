@@ -2,7 +2,8 @@
 
 *.mat
 *.npy
-data/*.txt
+data_train/*.txt
+data_test/*.txt
 
 
 # Auto-generated ignores:

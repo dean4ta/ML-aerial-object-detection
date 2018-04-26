@@ -203,9 +203,9 @@ def window(array, window=(0,), aStep=None, wStep=None):
     wStep = np.ones_like(window)
     
     if window.ndim > 1 or np.any(window < 0) or len(array.shape) < len(window):
-        raise ValueError("data/window dimensions conflict")
+        raise ValueError('data/window dimensions conflict')
     if np.any(origShape[-len(window):] < window * wStep):
-        raise ValueError("data/window dimensions conflict")
+        raise ValueError('data/window dimensions conflict')
 
     newShape = origShape
     win = window.copy()

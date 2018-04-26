@@ -36,7 +36,7 @@ def main():
     data = core.extractFeatures(data)
     N1, N2, D = np.shape(data)
     #↓ downsampled for system demonstration ↓#
-    D, dsD = 16, 16
+    D, dsD = 64, 64
     data = data[:,:,:dsD].reshape(N1*N2,dsD)
     labels = labels[:N1,:N2,:]
     #↑ comment for conceptually relevant simulation ↑#
@@ -60,7 +60,7 @@ def main():
     data = core.loadTestData(dataPath, dataObjName)
     del dataPath, dataObjName
     #↓ downsampled for system demonstration ↓#
-    N1, N2 = 500, 500
+    N1, N2 = 600, 600
     data = data[:N1,:N2,:]
     #↑ comment for conceptually relevant simulation ↑#
     
@@ -72,7 +72,7 @@ def main():
     #↑ comment for conceptually relevant simulation ↑#
     
     print('Testing classifier...')
-    labels = lda.predict(data).reshape(N1,N2,1)
+    labels = lda.predict(data).astype(np.int16).reshape(N1,N2,1)
     
     #-------------------------------------------------------------------------#
     
@@ -93,20 +93,20 @@ def main():
     for c in cnts:
     	# compute the center of the contour
     	M = cv2.moments(c)
-    	cX = int(M["m10"] / M["m00"])
-    	cY = int(M["m01"] / M["m00"])
+    	cX = int(M['m10'] / M['m00'])
+    	cY = int(M['m01'] / M['m00'])
      
     	# draw the contour and center of the shape on the image
     	cv2.drawContours(img, [c], -1, (0, 255, 0), 2)
     	cv2.circle(img, (cX, cY), 7, (255, 0, 255), -1)
-    	cv2.putText(img, "center", (cX - 20, cY - 20), 
+    	cv2.putText(img, 'center', (cX - 20, cY - 20), 
     	cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 255), 2)
         
         # temp = np.array([cX, cY, data_orig[cY, cX, 0]]) 
     	# pairs = np.append(pairs, [temp])
         
     	# show the image
-    	cv2.imshow("Image", img)
+    	cv2.imshow('Image', img)
     	cv2.imwrite('../data/centers.png', img)
     '''
     
@@ -116,7 +116,7 @@ def main():
     data[data>0] = 255
     cv2.imwrite('../data/test.png', data)
     data = data[:, :, 0]
-    im = cv2.imread("../data/test.jpg", cv2.IMREAD_GRAYSCALE)
+    im = cv2.imread('../data/test.jpg', cv2.IMREAD_GRAYSCALE)
     # Set up the detector with default parameters.
     detector = cv2.SimpleBlobDetector()
     # Detect blobs.
@@ -125,54 +125,26 @@ def main():
     # cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS ensures the size of the circle corresponds to the size of blob
     imWithKeypoints = cv2.drawKeypoints(im, keypoints, np.array([]), (0, 0, 255), cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
     # Show keypoints
-    cv2.imshow("Keypoints", imWithKeypoints)
+    cv2.imshow('Keypoints', imWithKeypoints)
     cv2.waitKey(0)
     '''
     
-    print('Performing post-processing...')
-
-    ''' TODO avoid certain flags in certain color ranges, avoid flags too near
-    img, locs, labels, pondMasks = core.loadTrainData()
-    row, col = img.shape[0], img.shape[1]
-    classed = predictedLabels
-    for i in range(len(row)):
-        for j in range(len(col)):
-            #RC
-            if (classed[i, j] == 2):
-                if (img[i, j, 0] >= 106 and img[i, j, 0] <= 40 and img[i, j, 1] >= 69 and img[i, j, 1] >= 40 and img[i, j, 2] >= 95 and img[i, j, 2] <= 59):
-                    classed[i, j] = 2;
-                else:
-                    classed[i, j] = -1;
-            #WC
-            elif (classed[i, j] == 1):
-                if (img[i, j, 0] >= 227 and img[i, j, 0] <= 255 and img[i, j, 1] >= 237 and img[i, j, 1] >= 255 and img[i, j, 2] >= 230 and img[i, j, 2] <= 255):
-                    classed[i, j] = 1;
-                else:
-                    classed[i, j] = -1;
-            #POOL
-            elif (classed[i, j] == 3):
-                if (img[i, j, 0] >= 32 and img[i, j, 0] <= 101 and img[i, j, 1] >= 135 and img[i, j, 1] >= 197 and img[i, j, 2] >= 151 and img[i, j, 2] <= 204):
-                    classed[i, j] = 3;
-                else:
-                    classed[i, j] = -1;
-            #POND
-            elif (classed[i, j] == 4):
-                if (img[i, j, 0] >= 36 and img[i, j, 0] <= 90 and img[i, j, 1] >= 40 and img[i, j, 1] >= 116 and img[i, j, 2] >= 43 and img[i, j, 2] <= 84):
-                    classed[i, j] = 4;
-                else:
-                    classed[i, j] = -1;
-    '''
+    img = core.quickReadMat()
+    for r in range(N1):
+        for c in range(N2):
+            if (labels[r, c] != -1):
+                labels[r, c] = core.valRGB(labels[r, c], img[r,c,:])
     
     #-------------------------------------------------------------------------#
     
     resultsPath = '../data_test/results.txt'
-    truthPath = '../data_test/labels_test.txt'    
+    truthPath = '../data_test/labels_test.txt'
     print('Saving alarms...')
-    core.saveResults(labels, resultsPath)    
+    core.saveResults(labels, resultsPath)
     print('Calculating score...')
     score = core.getF1Score(resultsPath, truthPath, radius=15)
-    print('Total Score = ' + score)
-
+    print('Total Score = ' + str(score))
+    
     #-------------------------------------------------------------------------#
 
 #%% Main
