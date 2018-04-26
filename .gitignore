@@ -1,6 +1,7 @@
 ### Custom ignores ###
 
 *.mat
+*.npy
 data/*.txt
 
 

@@ -1,4 +1,4 @@
-## EEL4930 Introduction to Machine Learning ##
+## EEL4930: Introduction to Machine Learning ##
 ---
 ### Final Project Notes ###
 
