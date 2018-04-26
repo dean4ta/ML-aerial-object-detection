@@ -3,9 +3,9 @@
 # Troy Tharpe
 # Dean Fortier
 
-import numpy as np # (given)
-import matplotlib.pyplot as plt # (given)
-import scipy.io as spio # (given)
+import numpy as np
+import matplotlib.pyplot as plt
+import scipy.io as spio
 import cv2,roll,util
 from numba import jit
 from sklearn.metrics import f1_score
@@ -105,7 +105,7 @@ def extract_features(data,win_y=15,win_x=15):
             features[i+int(win_y/2)+1,j+int(win_x/2)+2,8*D:(8+1)*D] = data[i+int(win_y/2)+1,j+int(win_x/2)+2,:]
     return features
 
-#%% Classification
+#%% classification
 
 def validation_split(features,labels,valPercent):
     ''' Split into validation and training sets
@@ -208,7 +208,7 @@ def get_f1_score(predictLabelPath,actualLabelPath,r):
 
 def main():
     
-    ## preprocessing ##
+    ## pre-processing ##
     '''
     data,locs,labels,pond_masks = load_train_data()
     hsv = cv2.cvtColor(data,cv2.COLOR_RGB2HSV)
@@ -226,7 +226,63 @@ def main():
     
     ## classification ##
     '''
-    The next few lines will need to be altered if not reading in pre aggregated data
+    data = np.load('../data/data_temp_features.npy')
+    data = data.reshape(data.shape[0]*data.shape[1],data.shape[2])
+    lda = LinearDiscriminantAnalysis()
+    lda.fit(data,np.ravel(labels))
+    X = lda.transform(data)
+    '''
+    
+    '''#ADDED BY CHRISTIAN
+    ## post-processing ##
+    data = load_custom_labels('../data/custom_labels.txt',(6250,6250,1))
+    data = 255*(data-np.min(data))/np.max(data).astype(np.uint8)
+    data[data>0] = 255
+    data = cv2.GaussianBlur(data,(1,1),0).astype(np.uint8)
+    cv2.imwrite('../data/test.png',data)
+    cnts = cv2.findContours(data.copy(), cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_SIMPLE)
+    cnts = cnts = cnts[1]
+    img = data.copy()
+    
+    
+    # loop over the contours
+    for c in cnts:
+    	# compute the center of the contour
+    	M = cv2.moments(c)
+    	cX = int(M["m10"] / M["m00"])
+    	cY = int(M["m01"] / M["m00"])
+     
+    	# draw the contour and center of the shape on the image
+    	cv2.drawContours(img, [c], -1, (0, 255, 0), 2)
+    	cv2.circle(img, (cX, cY), 7, (255, 0, 255), -1)
+    	cv2.putText(img, "center", (cX - 20, cY - 20),
+    	cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 255), 2)
+     
+    	# show the image
+    	cv2.imshow("Image", img)
+    	cv2.imwrite('../data/centers.png',img)
+    '''
+    
+    #ADDED BY DEAN
+    data = load_custom_labels('../data/custom_labels.txt',(6250,6250,1))
+    data = 255*(data-np.min(data))/np.max(data).astype(np.uint8)
+    data[data>0] = 255
+    cv2.imwrite('../data/test.png',data)
+    data = data[:,:,0]
+    im = cv2.imread("../data/test.jpg", cv2.IMREAD_GRAYSCALE)
+    # Set up the detector with default parameters.
+    detector = cv2.SimpleBlobDetector()
+    # Detect blobs.
+    keypoints = detector.detect(im)
+    # Draw detected blobs as red circles.
+    # cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS ensures the size of the circle corresponds to the size of blob
+    im_with_keypoints = cv2.drawKeypoints(im, keypoints, np.array([]), (0,0,255), cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
+    # Show keypoints
+    cv2.imshow("Keypoints", im_with_keypoints)
+    cv2.waitKey(0)
+    #/ADDED BY DEAN
+
+    # The next few lines will need to be altered if not reading in pre aggregated data
     '''
     data = np.load('../data/features.npy')
     data = data[:,:,0:24]
@@ -283,6 +339,7 @@ def main():
     ## visualization ##
     data_train,a,b,c = load_train_data()
     util.write_pred_data(data_train,classed)
+    '''
     
     ## scoring ##
     '''
@@ -293,3 +350,36 @@ def main():
     
 if  __name__ == '__main__':
     main()
+
+#%%
+    '''
+    data = load_custom_labels('../data/custom_labels.txt',(6250,6250,1))
+    data_orig,a,b,c = load_train_data()
+    data = 255*(data-np.min(data))/np.max(data).astype(np.uint8)
+    data[data>0] = 255
+    data = cv2.GaussianBlur(data,(1,1),0).astype(np.uint8)
+    cv2.imwrite('../data/test.png',data)
+    cnts = cv2.findContours(data.copy(), cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_SIMPLE)
+    cnts = cnts[1]
+    img = cv2.imread('../data/data_train_original.png')
+    
+    pairs = np.array(3)
+    # loop over the contours
+    for c in cnts:
+    	# compute the center of the contour
+    	M = cv2.moments(c)
+    	cX = int(M["m10"] / M["m00"])
+    	cY = int(M["m01"] / M["m00"])
+    	temp = np.array([cX,cY,data_orig[cY,cX,0]]) 
+    	pairs = np.append(pairs,[temp])
+    	# draw the contour and center of the shape on the image
+    	cv2.drawContours(img, [c], -1, (0, 255, 0), 2)
+    	cv2.circle(img, (cX, cY), 7, (255, 0, 255), -1)
+    	cv2.putText(img, "center", (cX - 20, cY - 20),
+    	cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 255), 2)
+     
+    	# show the image
+    cv2.imwrite('../data/centers.png',img)
+    '''
+    print('help')
+    

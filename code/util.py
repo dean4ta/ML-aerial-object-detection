@@ -5,7 +5,6 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
-
 import cv2, fileinput
 
 def write_train_data(data_train,locs,labels,pond_masks):
