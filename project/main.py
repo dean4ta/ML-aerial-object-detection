@@ -5,7 +5,6 @@
 
 import numpy as np
 import core
-import util
 
 from sklearn.discriminant_analysis \
     import LinearDiscriminantAnalysis
@@ -13,6 +12,8 @@ from sklearn.discriminant_analysis \
 #%% Main
 
 def main():
+    
+    SIMULATION_DOWNSAMPLE = True
     
     #-------------------------------------------------------------------------#
     
@@ -27,28 +28,24 @@ def main():
     data = core.loadTrainData(dataPath, dataObjName, labelPath, pondPaths)[0]
     labels = core.loadCustomLabels(customLabelsPath, np.shape(data))
     del dataPath, dataObjName, labelPath, pondPaths, customLabelsPath, i    
-    #↓ downsampled for system demonstration ↓#
-    N1, N2 = 1000, 1000
-    data = data[:N1,:N2,:]
-    #↑ comment for conceptually relevant simulation ↑#
+    
+    if SIMULATION_DOWNSAMPLE:
+        N1, N2 = 1000, 1000
+        data = data[:N1,:N2,:]
     
     print('Extracting features...')
     data = core.extractFeatures(data)
     N1, N2, D = np.shape(data)
-    #↓ downsampled for system demonstration ↓#
-    D, dsD = 64, 64
-    data = data[:,:,:dsD].reshape(N1*N2,dsD)
-    labels = labels[:N1,:N2,:]
-    #↑ comment for conceptually relevant simulation ↑#
+    
+    if SIMULATION_DOWNSAMPLE:
+        D, dsD = 16, 16
+        data = data[:,:,:dsD]
+        labels = labels[:N1,:N2,:]
+    data = data.reshape(N1*N2,-1)
     
     print('Training classifier...')
     data, labels = core.ldaInit(data, labels)
-    '''
-    For later visualization
-    labels = lda.predict(data).reshape(labels, N1, N2)
-    dataTrain, a, b, c = core.loadTrainData()    
-    util.writePredData(dataTrain, labels)
-    '''
+    
     lda = LinearDiscriminantAnalysis().fit(data, labels)
     del N1, N2, D, labels
     
@@ -59,26 +56,33 @@ def main():
     dataObjName = 'data_test'
     data = core.loadTestData(dataPath, dataObjName)
     del dataPath, dataObjName
-    #↓ downsampled for system demonstration ↓#
-    N1, N2 = 600, 600
-    data = data[:N1,:N2,:]
-    #↑ comment for conceptually relevant simulation ↑#
+    
+    if SIMULATION_DOWNSAMPLE:
+        N1, N2 = 600, 600
+        data = data[:N1,:N2,:]
     
     print('Extracting features...')
     data = core.extractFeatures(data)
     N1, N2, D = np.shape(data)
-    #↓ downsampled for system demonstration ↓#
-    data = data[:,:,:dsD].reshape(N1*N2,dsD)
-    #↑ comment for conceptually relevant simulation ↑#
+    
+    if SIMULATION_DOWNSAMPLE:
+        data = data[:,:,:dsD]
+    data = data.reshape(N1*N2,-1)
     
     print('Testing classifier...')
-    labels = lda.predict(data).astype(np.int16).reshape(N1,N2,1)
+    labels = core.classify(lda, data,  N1, N2)
+    
+    ''' visualization
+    labels = lda.predict(data).reshape(labels, N1, N2)
+    dataTrain, a, b, c = core.loadTrainData()    
+    util.writePredData(dataTrain, labels)
+    '''
     
     #-------------------------------------------------------------------------#
     
     print('Performing post-processing...')
     
-    ''' TODO findContours?
+    ''' findContours
     data = loadCustomLabels('../data/custom_labels.txt', (6250, 6250, 1))
     # data_orig, a, b, c = core.loadTrainData()
     data = 255*(data-np.min(data))/np.max(data).astype(np.uint8)
@@ -110,25 +114,6 @@ def main():
     	cv2.imwrite('../data/centers.png', img)
     '''
     
-    ''' TODO simpleDetector?
-    data = core.loadCustomLabels('../data/custom_labels.txt', (6250, 6250, 1))
-    data = 255*(data-np.min(data))/np.max(data).astype(np.uint8)
-    data[data>0] = 255
-    cv2.imwrite('../data/test.png', data)
-    data = data[:, :, 0]
-    im = cv2.imread('../data/test.jpg', cv2.IMREAD_GRAYSCALE)
-    # Set up the detector with default parameters.
-    detector = cv2.SimpleBlobDetector()
-    # Detect blobs.
-    keypoints = detector.detect(im)
-    # Draw detected blobs as red circles.
-    # cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS ensures the size of the circle corresponds to the size of blob
-    imWithKeypoints = cv2.drawKeypoints(im, keypoints, np.array([]), (0, 0, 255), cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
-    # Show keypoints
-    cv2.imshow('Keypoints', imWithKeypoints)
-    cv2.waitKey(0)
-    '''
-    
     img = core.quickReadMat()
     for r in range(N1):
         for c in range(N2):
@@ -139,10 +124,13 @@ def main():
     
     resultsPath = '../data_test/results.txt'
     truthPath = '../data_test/labels_test.txt'
+    pondPaths = []
+    for i in range(4):
+        pondPaths.append('../data_test/pond'+str(i+1)+'.txt')
     print('Saving alarms...')
     core.saveResults(labels, resultsPath)
     print('Calculating score...')
-    score = core.getF1Score(resultsPath, truthPath, radius=15)
+    score = core.getF1Score(resultsPath, truthPath, pondPaths, radius=15)
     print('Total Score = ' + str(score))
     
     #-------------------------------------------------------------------------#

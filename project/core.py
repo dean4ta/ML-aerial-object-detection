@@ -8,6 +8,9 @@ import scipy.io as spio
 import util, cv2
 from numba import jit
 
+from sklearn.discriminant_analysis \
+    import LinearDiscriminantAnalysis
+
 #%% load/save data
 
 @jit
@@ -185,6 +188,11 @@ def ldaInit(features, labels):
     noBgData = features[mask, ...]
     return noBgData, labels
 
+import warnings
+warnings.filterwarnings("ignore")
+def classify(lda, data,  N1, N2):
+    return lda.predict(data).astype(np.int16).reshape(N1,N2,1)
+
 @jit
 def unionShuffledCopies(a,b):
     assert len(a) == len(b)
@@ -225,9 +233,14 @@ def valRGB(labelVal, imgVal):
 
 #%% scoring
 
-def getF1Score(predictLabelPath, actualLabelPath, radius=11):
+def getF1Score(predictLabelPath, actualLabelPath, pondLabels, radius=11):
     predict = np.loadtxt(predictLabelPath).astype(np.int16)
     actual = np.loadtxt(actualLabelPath).astype(np.int16)
+    actual = np.delete(actual, np.where(actual[:, 2]==4), axis=0)
+    for i in range(4):
+        temp = np.loadtxt(pondLabels[i]).astype(np.int16)
+        temp = np.concatenate((temp, 4*np.ones((temp.shape[0],1))), axis=1).astype(np.int16)
+        actual = np.vstack([actual, temp]).astype(np.int16)
     maxU16, r2 = 2**16-1, radius**2
     xcord, ycord, label = 0, 1, 2
     for alarm in range(predict.shape[0]):
