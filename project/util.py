@@ -51,10 +51,9 @@ def writePredData(dataTrain, labels):
             dataPredLabeled.png: pixel-level target label mask (0xFF00FF)
     '''
     dataPredLabels = dataTrain.copy() # copy training image
-    N1, N2 = np.shape(labels)
+    N1, N2, dim = np.shape(labels)
     for i in range(N1):
         for j in range(N2):
-            print(j)
             if labels[i, j] == 1:
                dataPredLabels[i, j, :] = [0, 255, 0]
             elif labels[i, j] == 2:
@@ -63,7 +62,7 @@ def writePredData(dataTrain, labels):
                dataPredLabels[i, j, :] = [255, 255, 0]
             elif labels[i, j] == 4:
                dataPredLabels[i, j, :] = [255, 0, 0]                      
-    cv2.imwrite('../data/data_pred_labels.png', dataPredLabels[:, :, ::-1])
+    cv2.imwrite('../data_test/data_pred_labels.png', dataPredLabels[:, :, ::-1])
     
 
 def writeTrainDataPixels(dataTrain, locs, labels, pondMasks):
