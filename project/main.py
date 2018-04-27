@@ -4,7 +4,7 @@
 # Dean Fortier
 
 import numpy as np
-import core
+import core, util
 
 from sklearn.discriminant_analysis \
     import LinearDiscriminantAnalysis
@@ -43,9 +43,10 @@ def main():
         labels = labels[:N1,:N2,:]
     data = data.reshape(N1*N2,-1)
     
+    data = data.reshape(N1*N2,-1)
+    
     print('Training classifier...')
     data, labels = core.ldaInit(data, labels)
-    
     lda = LinearDiscriminantAnalysis().fit(data, labels)
     del N1, N2, D, labels
     
@@ -59,7 +60,7 @@ def main():
     
     if SIMULATION_DOWNSAMPLE:
         N1, N2 = 600, 600
-        data = data[:N1,:N2,:]
+        data = data[:N1,:N2,:]    
     
     print('Extracting features...')
     data = core.extractFeatures(data)
@@ -68,7 +69,7 @@ def main():
     if SIMULATION_DOWNSAMPLE:
         data = data[:,:,:dsD]
     data = data.reshape(N1*N2,-1)
-    
+
     print('Testing classifier...')
     labels = core.classify(lda, data,  N1, N2)
     
@@ -82,37 +83,7 @@ def main():
     
     print('Performing post-processing...')
     
-    ''' findContours
-    data = loadCustomLabels('../data/custom_labels.txt', (6250, 6250, 1))
-    # data_orig, a, b, c = core.loadTrainData()
-    data = 255*(data-np.min(data))/np.max(data).astype(np.uint8)
-    data[data>0] = 255
-    data = cv2.GaussianBlur(data, (1, 1), 0).astype(np.uint8)
-    cv2.imwrite('../data/test.png', data)
-    # img = cv2.imread('../data/data_train_original.png')
-    cnts = cv2.findContours(data.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    cnts = cnts = cnts[1]
-    img = data.copy()
-    # pairs = np.array(3)
-    for c in cnts:
-    	# compute the center of the contour
-    	M = cv2.moments(c)
-    	cX = int(M['m10'] / M['m00'])
-    	cY = int(M['m01'] / M['m00'])
-     
-    	# draw the contour and center of the shape on the image
-    	cv2.drawContours(img, [c], -1, (0, 255, 0), 2)
-    	cv2.circle(img, (cX, cY), 7, (255, 0, 255), -1)
-    	cv2.putText(img, 'center', (cX - 20, cY - 20), 
-    	cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 255), 2)
-        
-        # temp = np.array([cX, cY, data_orig[cY, cX, 0]]) 
-    	# pairs = np.append(pairs, [temp])
-        
-    	# show the image
-    	cv2.imshow('Image', img)
-    	cv2.imwrite('../data/centers.png', img)
-    '''
+    # centers = blobDetect(data) # tested, proven computationally intensive
     
     img = core.quickReadMat()
     for r in range(N1):
@@ -132,6 +103,10 @@ def main():
     print('Calculating score...')
     score = core.getF1Score(resultsPath, truthPath, pondPaths, radius=15)
     print('Total Score = ' + str(score))
+    dataPath = '../data_train/data_train.mat'
+    dataObjName = 'data_train'
+    data = core.loadTestData(dataPath, dataObjName)
+    util.writePredData(data, labels)
     
     #-------------------------------------------------------------------------#
 
@@ -139,4 +114,3 @@ def main():
 
 if  __name__ == '__main__':
     main()
-    

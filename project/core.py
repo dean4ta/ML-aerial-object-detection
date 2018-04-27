@@ -8,9 +8,6 @@ import scipy.io as spio
 import util, cv2
 from numba import jit
 
-from sklearn.discriminant_analysis \
-    import LinearDiscriminantAnalysis
-
 #%% load/save data
 
 @jit
@@ -72,6 +69,7 @@ def loadCustomLabels(path, dims):
             labelsMask[locs[i, 1], locs[i, 0]] = labels[i]
     return labelsMask
 
+@jit
 def saveResults(labels, path):
     N1, N2, D = labels.shape
     out = np.array([0,0,0]).astype(np.int16).reshape((1,3))
@@ -130,7 +128,7 @@ def extractFeatures(data, winY=15, winX=15, histBins=8):
     features = np.zeros((N1, N2, (histBins+1)*D)).astype(np.uint8)
     nValidRows = N1-winY+1
     for i in range(nValidRows):
-        # print('iter '+str(i+1)+'/'+str(nValidRows))
+        print('iter '+str(i+1)+'/'+str(nValidRows))
         windows = (util.window(data[i:i+winY, :, 0], (winY, winX)).astype(np.uint16))[0,:,:,:]
         for j in range(1, D):
             windows = np.concatenate((windows, j*typeMaxVal+util.window(data[i:i+winY, :, j], (winY, winX))[0,:,:,:]), axis=2)
@@ -181,6 +179,8 @@ def ldaInit(features, labels):
     count = 0;
     mask = np.ones(len(labels), dtype = bool)
     for i in range(len(labels)):
+        if(labels[i] == 4):
+            labels[i] = -1
         if labels[i] == -1 and count < (0.993 * bgPixCount):
             mask[i] = False
             count +=1
@@ -202,39 +202,71 @@ def unionShuffledCopies(a,b):
 @jit
 def valRGB(labelVal, imgVal):
     if (labelVal == 2):
-        if (imgVal[0] >= 106 and imgVal[0] <= 40 and
-            imgVal[1] >= 69 and imgVal[1] >= 40 and
-            imgVal[2] >= 95 and imgVal[2] <= 59):
+        if (imgVal[0] >= 40 and imgVal[0] <= 106 and
+            imgVal[1] >= 40 and imgVal[1] <= 69 and
+            imgVal[2] >= 59 and imgVal[2] <= 95):
             labelVal = 2;
         else:
             labelVal = -1;
     elif (labelVal == 1):
-        if (imgVal[0] >= 227 and imgVal[0] <= 255 and
-            imgVal[1] >= 237 and imgVal[1] >= 255 and
-            imgVal[2] >= 230 and imgVal[2] <= 255):
+        if (imgVal[0] >= 217 and
+            imgVal[1] >= 217 and
+            imgVal[2] >= 220):
             labelVal = 1;
         else:
             labelVal = -1;
     elif (labelVal == 3):
         if (imgVal[0] >= 32 and imgVal[0] <= 101 and
-            imgVal[1] >= 135 and imgVal[1] >= 197 and
+            imgVal[1] >= 135 and imgVal[1] <= 197 and
             imgVal[2] >= 151 and imgVal[2] <= 204):
             labelVal = 3;
         else:
             labelVal = -1;
     elif (labelVal == 4):
         if (imgVal[0] >= 36 and imgVal[0] <= 90 and
-            imgVal[1] >= 40 and imgVal[1] >= 116 and
+            imgVal[1] >= 40 and imgVal[1] <= 116 and
             imgVal[2] >= 43 and imgVal[2] <= 84):
             labelVal = 4;
         else:
             labelVal = -1;
     return labelVal
+#%% post processing
+    
+@jit  
+def blobDetect(data):
+    # data_orig, a, b, c = core.loadTrainData()
+    data = 255*(data-np.min(data))/np.max(data).astype(np.uint8)
+    data[data>0] = 255
+    data = cv2.GaussianBlur(data, (1, 1), 0).astype(np.uint8)
+    cnts = cv2.findContours(data.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    cnts = cnts = cnts[1]
+    img = data.copy()
+    centers = np.array(np.zeros((1,1)))
+    for c in cnts:
+    	# compute the center of the contour
+    	M = cv2.moments(c)
+    	cX = int(M['m10'] / M['m00'])
+    	cY = int(M['m01'] / M['m00'])
+    	centers = np.append(centers,cX,cY)  
+    	# draw the contour and center of the shape on the image
+    	cv2.drawContours(img, [c], -1, (0, 255, 0), 2)
+    	cv2.circle(img, (cX, cY), 7, (255, 0, 255), -1)
+    	cv2.putText(img, 'center', (cX - 20, cY - 20), 
+    	cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 255), 2)
+                
+    	# show the image
+    	cv2.imshow('Image', img)
+    	cv2.imwrite('../data/centers.png', img)
+    return centers 
 
 #%% scoring
 
+@jit
 def getF1Score(predictLabelPath, actualLabelPath, pondLabels, radius=11):
     predict = np.loadtxt(predictLabelPath).astype(np.int16)
+    if(predict.size == 0):
+        print('No predicted targets within data space')
+        return 0   
     actual = np.loadtxt(actualLabelPath).astype(np.int16)
     actual = np.delete(actual, np.where(actual[:, 2]==4), axis=0)
     for i in range(4):
@@ -279,4 +311,7 @@ def getF1Score(predictLabelPath, actualLabelPath, pondLabels, radius=11):
     falsePos = predict.shape[0]-truePos
     falseNeg = actual.shape[0]-truePos
     f1[3] = truePos/(truePos+falsePos+falseNeg+.00000000001)
+    print('TP = ' + str(truePos))
+    print('FP = ' + str(falsePos))
+    print('FN = ' + str(falseNeg))
     return .3*(f1[0]+f1[1]+f1[2])+.1*f1[3]
