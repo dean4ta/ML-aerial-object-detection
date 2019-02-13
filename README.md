@@ -9,3 +9,10 @@ __Goal__: detect and classify 4 classes - white cars, red cars, (blue) pools, an
 __Development__: preprocessing, feature extraction, model choice, evaluation, and parameter tuning
 
 __Final Scoring Metrics__: F-Score (refer to class notes 3/15)
+
+[Project PDF][ref-id-PDF]
+
+[ref-id-PDF]: https://github.com/dean4ta/ML-aerial-object-detection/blob/master/project/IndentationError.pdf
+
+![slide1](AOD1.png)
+![slide2](AOD2.png)
